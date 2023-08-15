@@ -101,8 +101,14 @@ fn get_character_set() -> String {
 }
 
 fn ask_user(message: &str) -> bool {
-    let input = get_input(message);
-    input.eq_ignore_ascii_case("y")
+    loop {
+        let input = get_input(message);
+        match input.to_lowercase().as_str() {
+            "y" => return true,
+            "n" => return false,
+            _ => println!("無効な入力です。\n'y' または 'n' を入力してください。"),
+        }
+    }
 }
 
 fn generate_password(chars: &str, length: usize) -> String {
@@ -114,5 +120,5 @@ fn generate_password(chars: &str, length: usize) -> String {
 
 fn is_strong(password: &str) -> bool {
     let result = zxcvbn::zxcvbn(password, &[]).unwrap();
-    result.score() > 2
+    result.score() > 3
 }
