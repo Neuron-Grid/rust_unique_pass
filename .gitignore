@@ -1,0 +1,52 @@
+/target
+
+### macOS 
+# 一般
+.DS_Store
+.AppleDouble
+.LSOverride
+
+#  アイコンの最後には2つの\rが必要
+Icon
+
+# サムネイル
+._*
+
+# ボリュームのルートに現れる可能性のあるファイル
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+
+# リモートAFP共有に作成される可能性のあるディレクトリ
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+### macOS Patch
+# iCloud生成ファイル
+*.icloud
+
+### Rust
+# Cargoによって生成されたコンパイル済みファイルと実行可能ファイル
+debug/
+target/
+
+# 実行ファイルを作成する場合は、gitignoreからCargo.lockを削除する。
+# https://doc.rust-lang.org/cargo/guide/cargo-toml-vs-cargo-lock.html
+Cargo.lock
+
+# rustfmtによって生成されたバックアップファイルである。
+**/*.rs.bk
+
+# rustcのMSVC Windowsビルドはこれらを生成し、デバッグ情報
+*.pdb
+
+### rust-analyzer
+# cargo 以外のビルドシステムで生成可能
+rust-project.json
