@@ -22,3 +22,12 @@ git clone https://github.com/Neuron-Grid/Password_Generator && \
 cd Password_Generator && \
 cargo run
 ```
+
+## このソフトウェアは以下のクレートを利用しています
+
+-   `rand` licensed under the MIT/Apache License 2.0.<br>
+-   `zxcvbn` licensed under the MIT License.
+
+-   GitHub repository<br>
+    [zxcvbn-rs](https://github.com/shssoichiro/zxcvbn-rs)<br>
+    [rand](https://github.com/rust-random/rand)
