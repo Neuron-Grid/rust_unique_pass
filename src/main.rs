@@ -80,7 +80,7 @@ fn assemble_character_set() -> String {
         loop {
             if ask_user("使用する特殊文字を変更しますか？ (y/n)") {
                 let special_chars_input =
-                    get_input("使用する特殊文字を入力してください (例: !@#):");
+                    get_input("使用する特殊文字を入力してください (例: !@#|¥");
                 assembled_charset += &special_chars_input;
                 break;
             } else {
@@ -88,6 +88,10 @@ fn assemble_character_set() -> String {
                 break;
             }
         }
+    }
+    if assembled_charset.is_empty() {
+        println!("エラー: 有効な文字セットが選択されていません。\n少なくとも1つの質問に「y」と回答して、文字セットを選択してください。再度実行し、指示に従ってください。");
+        std::process::exit(1);
     }
     assembled_charset
 }
@@ -99,7 +103,7 @@ fn ask_user(message: &str) -> bool {
         match input.to_lowercase().as_str() {
             "y" => return true,
             "n" => return false,
-            _ => println!("無効な入力です。\n'y' または 'n' を入力してください。"),
+            _ => println!("無効な入力です。\nyまたはnを入力してください。"),
         }
     }
 }

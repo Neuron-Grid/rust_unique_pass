@@ -28,7 +28,6 @@ Network Trash Folder
 Temporary Items
 .apdisk
 
-### macOS Patch
 # iCloud生成ファイル
 *.icloud
 
@@ -50,3 +49,32 @@ Cargo.lock
 ### rust-analyzer
 # cargo 以外のビルドシステムで生成可能
 rust-project.json
+
+### Visual Studio Code
+.vscode/
+
+### Windows
+# Windowsのサムネイルキャッシュ
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+
+# ダンプファイル
+*.stackdump
+
+# フォルダの設定ファイル
+[Dd]esktop.ini
+
+# ファイル共有で使用されるごみ箱
+$RECYCLE.BIN/
+
+# Windowsのインストーラーファイル
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+
+# ショートカット
+*.lnk
