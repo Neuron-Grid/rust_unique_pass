@@ -1,10 +1,17 @@
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [package]
 name = "password_generator"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 rand = "0.8.5"
 zxcvbn = "2.2.2"
+fluent = "0.13"
+fluent-resmgr = "0.0.6"
+fluent-bundle = "0.10"
+fluent_langid = "0.13"
+
+[[bin]]
+name = "passgen"
+path = "src/main.rs"
