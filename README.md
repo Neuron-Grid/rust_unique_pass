@@ -29,16 +29,16 @@ cargo run
 このパスワードジェネレーターはまだ名前がありません。<br>
 現時点では`password_generator`となっていますが、将来的に変更する予定です。<br>
 名前を募集しています。<br>
-名前を考えてくださった方は、[こちら](https://manager.neuron-grid.net/)からご連絡ください。
+名前を考えてくださった方は、issue等から連絡してください。
 
 名前を考える場合は、以下のことを考慮してください。<br>
 - CLIアプリなので、正式名称とコマンド名の2つを考えてください。
-- その他、自由に考えてください。
+- 正式名称はリポジトリ名や`Cargo.toml`の`name =`の部分に記載します。
 
 下記は具体例です。<br>
-| 募集中 | 正式名 | コマンド名 | 考案者 |
-| :---: | :---: | :---: | :---: |
-| 1. | rust unique pass | rupass | Neuron Grid |
+| 正式名 | コマンド名 | 考案者 |
+| :---: | :---: | :---: |
+| rust unique pass | rupass | Neuron Grid |
 
 ## 今後の予定
 - 多言語対応
@@ -49,8 +49,8 @@ cargo run
 -  `zxcvbn` licensed under the MIT License.<br>
 
 GitHub repository
-> [zxcvbn-rs](https://github.com/shssoichiro/zxcvbn-rs)<br>
-> [rand](https://github.com/rust-random/rand)
+> [rand](https://github.com/rust-random/rand)<br>
+> [zxcvbn-rs](https://github.com/shssoichiro/zxcvbn-rs)
 
 ## ライセンス
 このソフトウェアは`Apache License 2.0`の下で公開されています。<br>
