@@ -7,10 +7,11 @@ edition = "2021"
 [dependencies]
 rand = "0.8.5"
 zxcvbn = "2.2.2"
-fluent = "0.13"
+clap = "3.0.0"
+unic-langid = "0.9.0"
+resource = "0.5.0"
+fluent = "0.12.0"
 fluent-resmgr = "0.0.6"
-fluent-bundle = "0.10"
-fluent_langid = "0.13"
 
 [[bin]]
 name = "passgen"

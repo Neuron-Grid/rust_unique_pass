@@ -4,6 +4,6 @@ enter_special_chars = "使用する特殊文字を入力してください (例 
 change_special_chars = "使用する特殊文字を変更しますか？ (y/n)",
 include_special_chars = "特殊文字を含めますか？ (y/n)",
 invalid_input = "無効な入力です。\nyまたはnを入力してください。",
-default_special_chars = "デフォルトで使用される特殊文字は",
+default_special_chars_message = "デフォルトで使用される特殊文字は{}です。",
 generated_password = "生成されたパスワード",
 read_error = "読み込みエラー",
