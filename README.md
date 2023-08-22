@@ -13,7 +13,10 @@ CLIアプリなのでコマンドラインから実行してください。<br>
 
 
 ## コマンドのコピペ用
-Cargo.tomlの`dependencies`が古い可能性があります。<br>
+`Rust`がインストールされていることを確認してください。<br>
+`Rust`がインストールされていない場合は、[Rustの公式サイト](https://www.rust-lang.org/)を参照してください。
+
+クレートが古い可能性があります。<br>
 事前に確認してください。
 
 ``` zsh
@@ -21,6 +24,25 @@ git clone https://github.com/Neuron-Grid/Password_Generator && \
 cd Password_Generator && \
 cargo run
 ```
+
+## 名前の募集
+このパスワードジェネレーターはまだ名前がありません。<br>
+現時点では`password_generator`となっていますが、将来的に変更する予定です。<br>
+名前を募集しています。<br>
+名前を考えてくださった方は、[こちら](https://manager.neuron-grid.net/)からご連絡ください。
+
+名前を考える場合は、以下のことを考慮してください。<br>
+- CLIアプリなので、正式名称とコマンド名の2つを考えてください。
+- その他、自由に考えてください。
+
+下記は具体例です。<br>
+| 募集中 | 正式名 | コマンド名 | 考案者 |
+| :---: | :---: | :---: | :---: |
+| 1. | rust unique pass | rupass | Neuron Grid |
+
+## 今後の予定
+- 多言語対応
+- パスワードの強度を推定する機能の追加
 
 ## このソフトウェアは以下のクレートを利用しています
 -  `rand` licensed under the MIT/Apache License 2.0.<br>
