@@ -31,8 +31,6 @@ fn main() {
     // ユーザーの言語の設定に基づいて翻訳バンドルを初期化
     let bundle = initialize_bundle(&matches);
     // ユーザーとの対話のための翻訳されたプロンプトとメッセージを取得
-    let password_prompt = get_translation(&bundle, "password_prompt", None);
-    let charset_prompt = get_translation(&bundle, "charset_prompt", None);
     let generated_password_msg = get_translation(&bundle, "generated_password", None);
     // ユーザーの入力から希望のパスワードの長さを決定
     let length = get_password_length(&bundle);
@@ -41,11 +39,7 @@ fn main() {
     // 決定された設定を使用してセキュアなパスワードを生成
     let password = produce_secure_password(&character_set, length);
     // ユーザーに生成されたパスワードを表示
-    println!(
-        "{}\n{}",
-        generated_password_msg.as_str(),
-        password_prompt.as_str()
-    );
+    println!("{}\n{}", generated_password_msg.as_str(), password);
 }
 
 // ユーザーからの入力を取得し、トリムして返します。
@@ -54,10 +48,12 @@ fn get_input(prompt: &str, bundle: &FluentBundle<FluentResource>) -> String {
     let mut input = String::new();
     io::stdin()
         .read_line(&mut input)
-        .expect("ユーザーからの行の読み込みに失敗しました。\nFailed to read line from user.");
+        // 翻訳キーを新しく作り指定する。
+        .expect(&get_translation(bundle, "error_user_input", None));
     input.trim().to_string()
 }
 
+// パスワードの長さに関するエラータイプを定義します。
 enum PasswordLengthError {
     InvalidNumber,
     TooShort,
@@ -74,7 +70,7 @@ fn validate_password_length(input: &str) -> Result<usize, PasswordLengthError> {
     }
 }
 
-// パスワードの長さを取得します。
+// ユーザーにパスワードの長さを聞き、その長さを返す。
 fn get_password_length(bundle: &FluentBundle<FluentResource>) -> usize {
     loop {
         // get_inputにbundleを渡します
@@ -82,10 +78,19 @@ fn get_password_length(bundle: &FluentBundle<FluentResource>) -> usize {
         match validate_password_length(&input) {
             Ok(n) => return n,
             Err(PasswordLengthError::InvalidNumber) => {
-                println!("有効な数値を入力してください。");
+                // 翻訳キーのerror_invalid_numberを表示させる。
+                println!("{}", get_translation(bundle, "error_invalid_number", None));
                 continue;
             }
-            Err(PasswordLengthError::TooShort) => println!("推奨される長さは12文字以上です。"),
+            // Err(PasswordLengthError::TooShort) => println!("推奨される長さは12文字以上です。"),
+            Err(PasswordLengthError::TooShort) => {
+                // 翻訳キーのerror_password_too_shortを表示させる。
+                println!(
+                    "{}",
+                    get_translation(bundle, "error_password_too_short", None)
+                );
+                continue;
+            }
         }
     }
 }
@@ -94,9 +99,9 @@ fn get_password_length(bundle: &FluentBundle<FluentResource>) -> usize {
 fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
     // 各質問とそれに対応する文字セットをペアとして保持します。
     let questions = [
-        ("大文字を含めますか？ (y/n)", "ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
-        ("小文字を含めますか？ (y/n)", "abcdefghijklmnopqrstuvwxyz"),
-        ("数字を含めますか？ (y/n)", "0123456789"),
+        ("question_uppercase", "ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+        ("question_lowercase", "abcdefghijklmnopqrstuvwxyz"),
+        ("question_numbers", "0123456789"),
     ];
     // デフォルトで使用される特殊文字のセットを定義します。
     let default_special_characters = "!@#$%^&*()-_=+';:,.<>/?";
@@ -113,11 +118,21 @@ fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
             .replace("{}", &default_special_characters)
     );
 
-    if ask_user("特殊文字を含めますか？ (y/n)", bundle) {
+    // if ask_user("特殊文字を含めますか？ (y/n)", bundle) {
+    if ask_user(
+        &get_translation(bundle, "question_special_chars", None),
+        bundle,
+    ) {
         loop {
-            if ask_user("使用する特殊文字を変更しますか？ (y/n)", bundle) {
+            // if ask_user("使用する特殊文字を変更しますか？ (y/n)", bundle) {
+            if ask_user(
+                &get_translation(bundle, "question_change_special_chars", None),
+                bundle,
+            ) {
                 let special_chars_input =
-                    get_input("使用する特殊文字を入力してください (例: !@#|¥", bundle);
+                    // get_input("使用する特殊文字を入力してください (例: !@#|¥", bundle);
+                    // 翻訳キーとしてquestion_enter_special_charsを指定する。
+                    get_input(&get_translation(bundle, "question_enter_special_chars", None), bundle);
                 assembled_charset += &special_chars_input;
                 break;
             } else {
@@ -147,7 +162,10 @@ fn ask_user(message: &str, bundle: &FluentBundle<FluentResource>) -> bool {
             "n" => return false,
             "yes" => return true,
             "no" => return false,
-            _ => println!("無効な入力です。\nyまたはnを入力してください。"),
+            "はい" => return true,
+            "いいえ" => return false,
+            // 翻訳キーのerror_invalid_inputを表示させる。
+            _ => println!("{}", get_translation(bundle, "error_invalid_input", None)),
         }
     }
 }
@@ -186,7 +204,7 @@ fn is_strong(password: &str) -> bool {
 fn parse_args() -> clap::ArgMatches {
     App::new("passgen")
         .version("0.2 beta")
-        .author("Neuron Grid")
+        .author("Neuron Grid <neuron-grid@neurongrid.net>")
         .about("Generate strong passwords.")
         .arg(
             Arg::with_name("language")
@@ -203,7 +221,8 @@ fn map_to_fluent_code(code: &str) -> LanguageIdentifier {
     match LanguageIdentifier::from_str(code) {
         Ok(lang_id) => lang_id,
         Err(_) => {
-            eprintln!("解析に失敗しました。");
+            // Display a default error message
+            eprintln!("Failed to parse the provided language identifier.");
             std::process::exit(1);
         }
     }
@@ -231,22 +250,22 @@ fn load_fluent_bundle(language: &str) -> Option<FluentBundle<FluentResource>> {
     let ftl_string = match fs::read_to_string(&ftl_filepath) {
         Ok(content) => content,
         Err(_) => {
-            eprintln!("FTLファイルを読み取れません。");
+            eprintln!("FTLファイルを読み取れません。\nFTL file reading not possible.");
             std::process::exit(1);
         }
     };
     let ftl_resource = match FluentResource::try_new(ftl_string) {
         Ok(resource) => resource,
         Err(_) => {
-            eprintln!("FTL文字列をパースできませんでした。");
+            eprintln!("FTL文字列をパースできませんでした。\nFTL string could not be parsed.");
             std::process::exit(1);
         }
     };
-    let langid = fluent_code; // この行を修正しました
+    let langid = fluent_code;
     let mut bundle = FluentBundle::new(vec![&langid]);
     bundle
         .add_resource(ftl_resource)
-        .expect("FTLリソースの追加に失敗しました。");
+        .expect("FTLリソースの追加に失敗しました。\nFTL resource could not be added.");
     Some(bundle)
 }
 
