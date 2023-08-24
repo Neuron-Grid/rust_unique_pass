@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 
-//     http://www.apache.org/licenses/LICENSE-2.0
+//     https://www.apache.org/licenses/LICENSE-2.0
 
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -118,13 +118,13 @@ fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
             .replace("{}", &default_special_characters)
     );
 
-    // if ask_user("特殊文字を含めますか？ (y/n)", bundle) {
+    // if ask_user("特殊文字を含めますか？", bundle) {
     if ask_user(
         &get_translation(bundle, "question_special_chars", None),
         bundle,
     ) {
         loop {
-            // if ask_user("使用する特殊文字を変更しますか？ (y/n)", bundle) {
+            // if ask_user("使用する特殊文字を変更しますか？", bundle) {
             if ask_user(
                 &get_translation(bundle, "question_change_special_chars", None),
                 bundle,
@@ -239,6 +239,7 @@ fn initialize_bundle(matches: &clap::ArgMatches) -> FluentBundle<FluentResource>
     }
 }
 
+// 指定された言語のFTLファイルを読み込み、Fluentバンドルを返します。
 fn load_fluent_bundle(language: &str) -> Option<FluentBundle<FluentResource>> {
     let fluent_code = map_to_fluent_code(language);
     let ftl_filepath = format!("./translation/{}.ftl", fluent_code);
@@ -259,7 +260,12 @@ fn load_fluent_bundle(language: &str) -> Option<FluentBundle<FluentResource>> {
         Err(_) => {
             eprintln!("FTL文字列をパースできませんでした。\nFTL string could not be parsed.");
             std::process::exit(1);
-        }
+        } // これはテスト用のコードです。
+          // This is a test code.
+          // Err(e) => {
+          //     eprintln!("FTL文字列をパースできませんでした。\n{:?}", e);
+          //     std::process::exit(1);
+          // }
     };
     let langid = fluent_code;
     let mut bundle = FluentBundle::new(vec![&langid]);
