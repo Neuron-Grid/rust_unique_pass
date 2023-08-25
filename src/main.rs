@@ -97,79 +97,25 @@ fn get_password_length(bundle: &FluentBundle<FluentResource>) -> usize {
     }
 }
 
-// // ユーザーの選択に基づいて文字セットを組み立てて返します。
-// fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
-//     // 各質問とそれに対応する文字セットをペアとして保持します。
-//     let questions = [
-//         ("question_uppercase", "ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
-//         ("question_lowercase", "abcdefghijklmnopqrstuvwxyz"),
-//         ("question_numbers", "0123456789"),
-//     ];
-//     // デフォルトで使用される特殊文字のセットを定義します。
-//     let default_special_characters = "!@#$%^&*()-_=+';:,.<>?";
-//     // 選択に基づいて組み立てられる文字セットを一時的に格納します。
-//     let mut assembled_charset: String = String::new();
-//     // FTLメッセージに変数を渡すためのFluentArgsを作成します。
-//     let mut args = FluentArgs::new();
-//     args.insert("char", default_special_characters.into());
-//     // 翻訳キーを指定
-//     // default_special_chars_message = "デフォルトで使用される特殊文字は{char}です。",
-//     let message = get_translation(bundle, "default_special_chars_message", Some(&args));
-//     println!("{}", message);
-//     // 各質問に対してユーザーに尋ねます。
-//     for (question, chars) in questions.iter() {
-//         if ask_user(&get_translation(bundle, *question, None), bundle) {
-//             assembled_charset += chars;
-//         }
-//     }
-//     if ask_user(
-//         // 翻訳キーを指定
-//         // question_special_chars = "特殊文字を含めますか？",
-//         &get_translation(bundle, "question_special_chars", None),
-//         bundle,
-//     ) {
-//         loop {
-//             if ask_user(
-//                 // 翻訳キーを指定
-//                 // question_change_special_chars = "使用する特殊文字を変更しますか？",
-//                 &get_translation(bundle, "question_change_special_chars", None),
-//                 bundle,
-//             ) {
-//                 let special_chars_input = get_input(
-//                     // 翻訳キーを指定
-//                     // question_enter_special_chars = "使用する特殊文字を入力してください (例 = !@#|¥)",
-//                     &get_translation(bundle, "question_enter_special_chars", None),
-//                     bundle,
-//                 );
-//                 assembled_charset += &special_chars_input;
-//                 break;
-//             } else {
-//                 assembled_charset += default_special_characters;
-//                 break;
-//             }
-//         }
-//     }
-//     if assembled_charset.is_empty() {
-//         println!(
-//             "{}",
-//             // 翻訳キーを指定
-//             // error_no_charset_selected = "エラー: 有効な文字セットが選択されていません。
-//             get_translation(bundle, "error_no_charset_selected", None)
-//         );
-//         std::process::exit(1);
-//     }
-//     assembled_charset
-// }
-
+// ユーザーの選択に基づいて文字セットを組み立てて返します。
 fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
     // 各質問とそれに対応する文字セットをペアとして保持します。
     let questions = [
-        ("question_uppercase", "ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
-        ("question_lowercase", "abcdefghijklmnopqrstuvwxyz"),
-        ("question_numbers", "0123456789"),
+        (
+            get_translation(&bundle, "question_uppercase", None),
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        ),
+        (
+            get_translation(&bundle, "question_lowercase", None),
+            "abcdefghijklmnopqrstuvwxyz",
+        ),
+        (
+            get_translation(&bundle, "question_numbers", None),
+            "0123456789",
+        ),
     ];
     // デフォルトで使用される特殊文字のセットを定義します。
-    let default_special_characters = "!@#$%^&*()-_=+';:,.<>/?";
+    let default_special_characters = "!?@#$%^&*()-_=+';:,.<>/";
     // 選択に基づいて組み立てられる文字セットを一時的に格納します。
     let mut assembled_charset: String = String::new();
     // FTLメッセージに変数を渡すためのFluentArgsを作成します。
@@ -178,6 +124,7 @@ fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
         "specialChars",
         FluentValue::from(default_special_characters),
     );
+    // 各質問に対してユーザーに尋ねる
     for (question, chars) in questions.iter() {
         if ask_user(question, bundle) {
             assembled_charset += chars;
@@ -187,21 +134,22 @@ fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
         "{}",
         get_translation(bundle, "default_special_chars_message", Some(&args))
     );
-
-    // if ask_user("特殊文字を含めますか？", bundle) {
     if ask_user(
+        //  翻訳キーを指定
+        // question_special_chars = "特殊文字を含めますか？",
         &get_translation(bundle, "question_special_chars", None),
         bundle,
     ) {
         loop {
-            // if ask_user("使用する特殊文字を変更しますか？", bundle) {
             if ask_user(
+                // 翻訳キーを指定
+                // question_change_special_chars = "使用する特殊文字を変更しますか？",
                 &get_translation(bundle, "question_change_special_chars", None),
                 bundle,
             ) {
                 let special_chars_input =
-                    // get_input("使用する特殊文字を入力してください (例: !@#|¥", bundle);
-                    // 翻訳キーとしてquestion_enter_special_charsを指定する。
+                    // 翻訳キーを指定
+                    // question_enter_special_chars = "使用する特殊文字を入力してください (例 = !@#|¥)",
                     get_input(&get_translation(bundle, "question_enter_special_chars", None), bundle);
                 assembled_charset += &special_chars_input;
                 break;
@@ -212,9 +160,10 @@ fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
         }
     }
     if assembled_charset.is_empty() {
-        // 翻訳キーのerror_no_charset_selectedを表示させる。
         println!(
             "{}",
+            // 翻訳キーを指定
+            // error_no_charset_selected = "エラー: 有効な文字セットが選択されていません。
             get_translation(bundle, "error_no_charset_selected", None)
         );
 
@@ -277,7 +226,7 @@ fn is_strong(password: &str) -> bool {
 fn parse_args() -> clap::ArgMatches {
     App::new("rupass")
         .version("0.3 beta")
-        .author("Neuron Grid <neuron-grid@neurongrid.net>")
+        .author("Neuron Grid")
         .about("rust unique pass: Generate strong password.")
         .arg(
             Arg::with_name("language")
@@ -287,13 +236,5 @@ fn parse_args() -> clap::ArgMatches {
                 .help("Sets the language for user prompts and messages. \nSupported Language: ja and en.")
                 .takes_value(true),
         )
-        /*.arg(
-            Arg::with_name("number")
-                .short('n')
-                .long("number")
-                .value_name("NUMBER")
-                .help("Sets the number of passwords to generate.")
-                .takes_value(true),
-        )*/
         .get_matches()
 }
