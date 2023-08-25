@@ -29,10 +29,8 @@ cargo run
 - **多言語対応**
   - 現在対応中
 - **パスワードの強度推定機能**
-  - [x] `zxcvbn`を利用して実装
+  - `zxcvbn`を利用して実装
   - 気が向いたら実装します。
-
-
 
 ## このソフトウェアは以下のクレートを利用しています
 -  `rand` licensed under the MIT/Apache License 2.0.<br>

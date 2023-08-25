@@ -62,17 +62,16 @@ pub fn load_fluent_bundle(language: &str) -> Option<FluentBundle<FluentResource>
     };
     let ftl_resource = match FluentResource::try_new(ftl_string) {
         Ok(resource) => resource,
-        Err(_) => {
+        /*Err(_) => {
             eprintln!("FTL文字列をパースできませんでした。\nFTL string could not be parsed.");
             std::process::exit(1);
-        } /*
-            これはテスト用のコードです。
-            This is a test code.
-            Err(error) => {
-                eprintln!("FTL文字列をパースできませんでした。\n{:?}", error);
-                std::process::exit(1);
-            }
-          */
+        } */
+        // これはテスト用のコードです。
+        // This is a test code.
+        Err(error) => {
+            eprintln!("FTL文字列をパースできませんでした。\n{:?}", error);
+            std::process::exit(1);
+        }
     };
     let langid = fluent_code;
     let mut bundle = FluentBundle::new(vec![&langid]);

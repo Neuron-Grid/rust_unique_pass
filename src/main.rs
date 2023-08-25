@@ -18,9 +18,11 @@ mod i18n;
 extern crate rand;
 extern crate zxcvbn;
 use clap::{App, Arg};
+use fluent::FluentValue;
 use fluent::{FluentBundle, FluentResource};
 use i18n::{get_translation, initialize_bundle};
 use rand::{rngs::OsRng, seq::SliceRandom};
+use std::collections::HashMap;
 use std::io;
 
 // ユーザからの入力に基づいて強固なパスワードを生成し、表示します。
@@ -72,8 +74,10 @@ fn validate_password_length(input: &str) -> Result<usize, PasswordLengthError> {
 // ユーザーにパスワードの長さを聞き、その長さを返す。
 fn get_password_length(bundle: &FluentBundle<FluentResource>) -> usize {
     loop {
-        // get_inputにbundleを渡します
-        let input = get_input("", bundle);
+        // プロンプトとして表示するメッセージを取得
+        let prompt = get_translation(bundle, "question_password_length", None);
+        // get_inputに正しいプロンプトを渡します
+        let input = get_input(&prompt, bundle);
         match validate_password_length(&input) {
             Ok(definitely) => return definitely,
             Err(PasswordLengthError::InvalidNumber) => {
@@ -81,7 +85,6 @@ fn get_password_length(bundle: &FluentBundle<FluentResource>) -> usize {
                 println!("{}", get_translation(bundle, "error_invalid_number", None));
                 continue;
             }
-            // Err(PasswordLengthError::TooShort) => println!("推奨される長さは12文字以上です。"),
             Err(PasswordLengthError::TooShort) => {
                 // 翻訳キーのerror_password_too_shortを表示させる。
                 println!(
@@ -94,7 +97,70 @@ fn get_password_length(bundle: &FluentBundle<FluentResource>) -> usize {
     }
 }
 
-// ユーザーの選択に基づいて文字セットを組み立てて返します。
+// // ユーザーの選択に基づいて文字セットを組み立てて返します。
+// fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
+//     // 各質問とそれに対応する文字セットをペアとして保持します。
+//     let questions = [
+//         ("question_uppercase", "ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+//         ("question_lowercase", "abcdefghijklmnopqrstuvwxyz"),
+//         ("question_numbers", "0123456789"),
+//     ];
+//     // デフォルトで使用される特殊文字のセットを定義します。
+//     let default_special_characters = "!@#$%^&*()-_=+';:,.<>?";
+//     // 選択に基づいて組み立てられる文字セットを一時的に格納します。
+//     let mut assembled_charset: String = String::new();
+//     // FTLメッセージに変数を渡すためのFluentArgsを作成します。
+//     let mut args = FluentArgs::new();
+//     args.insert("char", default_special_characters.into());
+//     // 翻訳キーを指定
+//     // default_special_chars_message = "デフォルトで使用される特殊文字は{char}です。",
+//     let message = get_translation(bundle, "default_special_chars_message", Some(&args));
+//     println!("{}", message);
+//     // 各質問に対してユーザーに尋ねます。
+//     for (question, chars) in questions.iter() {
+//         if ask_user(&get_translation(bundle, *question, None), bundle) {
+//             assembled_charset += chars;
+//         }
+//     }
+//     if ask_user(
+//         // 翻訳キーを指定
+//         // question_special_chars = "特殊文字を含めますか？",
+//         &get_translation(bundle, "question_special_chars", None),
+//         bundle,
+//     ) {
+//         loop {
+//             if ask_user(
+//                 // 翻訳キーを指定
+//                 // question_change_special_chars = "使用する特殊文字を変更しますか？",
+//                 &get_translation(bundle, "question_change_special_chars", None),
+//                 bundle,
+//             ) {
+//                 let special_chars_input = get_input(
+//                     // 翻訳キーを指定
+//                     // question_enter_special_chars = "使用する特殊文字を入力してください (例 = !@#|¥)",
+//                     &get_translation(bundle, "question_enter_special_chars", None),
+//                     bundle,
+//                 );
+//                 assembled_charset += &special_chars_input;
+//                 break;
+//             } else {
+//                 assembled_charset += default_special_characters;
+//                 break;
+//             }
+//         }
+//     }
+//     if assembled_charset.is_empty() {
+//         println!(
+//             "{}",
+//             // 翻訳キーを指定
+//             // error_no_charset_selected = "エラー: 有効な文字セットが選択されていません。
+//             get_translation(bundle, "error_no_charset_selected", None)
+//         );
+//         std::process::exit(1);
+//     }
+//     assembled_charset
+// }
+
 fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
     // 各質問とそれに対応する文字セットをペアとして保持します。
     let questions = [
@@ -106,6 +172,12 @@ fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
     let default_special_characters = "!@#$%^&*()-_=+';:,.<>/?";
     // 選択に基づいて組み立てられる文字セットを一時的に格納します。
     let mut assembled_charset: String = String::new();
+    // FTLメッセージに変数を渡すためのFluentArgsを作成します。
+    let mut args: HashMap<&str, FluentValue> = HashMap::new();
+    args.insert(
+        "specialChars",
+        FluentValue::from(default_special_characters),
+    );
     for (question, chars) in questions.iter() {
         if ask_user(question, bundle) {
             assembled_charset += chars;
@@ -113,8 +185,7 @@ fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
     }
     println!(
         "{}",
-        get_translation(bundle, "default_special_chars_message", None)
-            .replace("{}", &default_special_characters)
+        get_translation(bundle, "default_special_chars_message", Some(&args))
     );
 
     // if ask_user("特殊文字を含めますか？", bundle) {
@@ -165,7 +236,8 @@ fn ask_user(message: &str, bundle: &FluentBundle<FluentResource>) -> bool {
             // japanese
             "はい" => return true,
             "いいえ" => return false,
-            // 翻訳キーのerror_invalid_inputを表示させる。
+            // 翻訳キーを指定
+            // error_invalid_input = "無効な入力です。\nyまたはnを入力してください。\n「はい」か「いいえ」でも良いです。",
             _ => println!("{}", get_translation(bundle, "error_invalid_input", None)),
         }
     }
