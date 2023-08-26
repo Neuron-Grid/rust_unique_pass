@@ -24,9 +24,12 @@ const DEFAULT_LANGUAGE: &str = "en-US";
 pub fn map_to_fluent_code(code: &str) -> LanguageIdentifier {
     match LanguageIdentifier::from_str(code) {
         Ok(lang_id) => lang_id,
-        Err(_) => {
+        Err(error) => {
             // デフォルトのエラーメッセージを表示する
-            eprintln!("Failed to parse the provided language identifier.");
+            eprintln!(
+                "Failed to parse the provided language identifier.\n{:?}",
+                error
+            );
             std::process::exit(1);
         }
     }
@@ -38,7 +41,7 @@ pub fn initialize_bundle(matches: &clap::ArgMatches) -> FluentBundle<FluentResou
     match load_fluent_bundle(language) {
         Some(bundle) => bundle,
         None => {
-            eprintln!("翻訳バンドルのロードに失敗しました。");
+            eprintln!("翻訳バンドルのロードに失敗しました。\nFailed to load translation bundle.");
             std::process::exit(1);
         }
     }
@@ -55,21 +58,21 @@ pub fn load_fluent_bundle(language: &str) -> Option<FluentBundle<FluentResource>
     }
     let ftl_string = match fs::read_to_string(&ftl_filepath) {
         Ok(content) => content,
-        Err(_) => {
-            eprintln!("FTLファイルを読み取れません。\nFTL file reading not possible.");
+        Err(error) => {
+            eprintln!(
+                "FTLファイルを読み取れません。\nFTL file reading not possible.\n{:?}",
+                error
+            );
             std::process::exit(1);
         }
     };
     let ftl_resource = match FluentResource::try_new(ftl_string) {
         Ok(resource) => resource,
-        /*Err(_) => {
-            eprintln!("FTL文字列をパースできませんでした。\nFTL string could not be parsed.");
-            std::process::exit(1);
-        } */
-        // これはテスト用のコードです。
-        // This is a test code.
         Err(error) => {
-            eprintln!("FTL文字列をパースできませんでした。\n{:?}", error);
+            eprintln!(
+                "FTL文字列をパースできませんでした。\nFTL string could not be parsed.\n{:?}",
+                error
+            );
             std::process::exit(1);
         }
     };
@@ -92,7 +95,7 @@ pub fn get_translation(
             None => return "翻訳が見つかりません。\nTranslation not found.".to_string(),
         };
         let result = bundle.format_pattern(value, args, &mut vec![]);
-        result.to_string()
+        result.trim_matches('"').to_string()
     } else {
         "翻訳が見つかりません。\nTranslation not found.".to_string()
     }
