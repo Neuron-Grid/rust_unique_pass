@@ -1,17 +1,17 @@
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [package]
 name = "rust_unique_pass"
-version = "0.1.0"
+version = "0.3.0-beta"
 edition = "2021"
 
 [dependencies]
-rand = "0.8.5"
-zxcvbn = "2.2.2"
 clap = "3.0.0"
-unic-langid = "0.9.0"
-resource = "0.5.0"
 fluent = "0.12.0"
 fluent-resmgr = "0.0.6"
+rand = "0.8.5"
+resource = "0.5.0"
+unic-langid = "0.9.0"
+zxcvbn = "2.2.2"
 
 [[bin]]
 name = "rupass"

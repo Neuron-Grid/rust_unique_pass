@@ -21,7 +21,7 @@ use unic_langid::LanguageIdentifier;
 // デフォルトの言語英語に定義します。
 const DEFAULT_LANGUAGE: &str = "en-US";
 
-pub fn map_to_fluent_code(code: &str) -> LanguageIdentifier {
+fn map_to_fluent_code(code: &str) -> LanguageIdentifier {
     match LanguageIdentifier::from_str(code) {
         Ok(lang_id) => lang_id,
         Err(error) => {
@@ -48,7 +48,7 @@ pub fn initialize_bundle(matches: &clap::ArgMatches) -> FluentBundle<FluentResou
 }
 
 // 指定された言語のFTLファイルを読み込み、Fluentバンドルを返します。
-pub fn load_fluent_bundle(language: &str) -> Option<FluentBundle<FluentResource>> {
+fn load_fluent_bundle(language: &str) -> Option<FluentBundle<FluentResource>> {
     let fluent_code = map_to_fluent_code(language);
     let ftl_filepath = format!("./translation/{}.ftl", fluent_code);
     // 指定された言語のFTLファイルが存在するかどうかを確認

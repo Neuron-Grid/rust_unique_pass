@@ -225,15 +225,31 @@ fn is_strong(password: &str) -> bool {
 // ユーザーが指定した言語に基づいて、Fluentファイルの名前を返します。
 fn parse_args() -> clap::ArgMatches {
     App::new("rupass")
-        .version("0.3 beta")
+        .version(env!("CARGO_PKG_VERSION"))
         .author("Neuron Grid")
         .about("rust unique pass: Generate strong password.")
+        // --helpオプション
+        .arg(
+            Arg::with_name("help")
+                .short('h')
+                .long("help")
+                .help(
+                    "-h, --help: Prints help information.\
+                    \n-V, --version: Prints version information.\
+                    \n-l, --language: Sets the language for user prompts and messages.",
+                )
+                .takes_value(false),
+        )
+        // 言語設定用オプション
         .arg(
             Arg::with_name("language")
                 .short('l')
                 .long("language")
                 .value_name("LANGUAGE")
-                .help("Sets the language for user prompts and messages. \nSupported Language: ja and en.")
+                .help(
+                    "Sets the language for user prompts and messages.\
+                    \nSupported Language: ja and en.",
+                )
                 .takes_value(true),
         )
         .get_matches()
