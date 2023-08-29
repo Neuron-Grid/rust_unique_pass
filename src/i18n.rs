@@ -15,11 +15,21 @@ limitations under the License.
 */
 
 use fluent::{FluentBundle, FluentResource};
-use std::{fs, str::FromStr};
+use rust_embed::RustEmbed;
+use std::str::FromStr;
 use unic_langid::LanguageIdentifier;
 
 // デフォルトの言語英語に定義します。
 const DEFAULT_LANGUAGE: &str = "en-US";
+
+#[derive(RustEmbed)]
+#[folder = "./translation/"]
+#[include = "*.ftl"]
+struct Translations;
+
+fn get_embedded_resource(filename: &str) -> Option<String> {
+    Translations::get(filename).and_then(|data| String::from_utf8(data.data.to_vec()).ok())
+}
 
 fn map_to_fluent_code(code: &str) -> LanguageIdentifier {
     match LanguageIdentifier::from_str(code) {
@@ -27,7 +37,9 @@ fn map_to_fluent_code(code: &str) -> LanguageIdentifier {
         Err(error) => {
             // デフォルトのエラーメッセージを表示する
             eprintln!(
-                "Failed to parse the provided language identifier.\n{:?}",
+                "指定された言語識別子の解析に失敗しました。\
+                \nFailed to parse the provided language identifier.\
+                \n{:?}",
                 error
             );
             std::process::exit(1);
@@ -41,7 +53,10 @@ pub fn initialize_bundle(matches: &clap::ArgMatches) -> FluentBundle<FluentResou
     match load_fluent_bundle(language) {
         Some(bundle) => bundle,
         None => {
-            eprintln!("翻訳バンドルのロードに失敗しました。\nFailed to load translation bundle.");
+            eprintln!(
+                "翻訳バンドルのロードに失敗しました。\
+                \nFailed to load translation bundle."
+            );
             std::process::exit(1);
         }
     }
@@ -50,20 +65,16 @@ pub fn initialize_bundle(matches: &clap::ArgMatches) -> FluentBundle<FluentResou
 // 指定された言語のFTLファイルを読み込み、Fluentバンドルを返します。
 fn load_fluent_bundle(language: &str) -> Option<FluentBundle<FluentResource>> {
     let fluent_code = map_to_fluent_code(language);
-    let ftl_filepath = format!("./translation/{}.ftl", fluent_code);
-    // 指定された言語のFTLファイルが存在するかどうかを確認
-    if !std::path::Path::new(&ftl_filepath).exists() {
-        eprintln!("エラー: {}\nファイルが存在しません。", ftl_filepath);
-        return None;
-    }
-    let ftl_string = match fs::read_to_string(&ftl_filepath) {
-        Ok(content) => content,
-        Err(error) => {
+    let ftl_filename = format!("{}.ftl", fluent_code);
+    // 埋め込まれたリソースを取得
+    let ftl_string = match get_embedded_resource(&ftl_filename) {
+        Some(content) => content,
+        None => {
             eprintln!(
-                "FTLファイルを読み取れません。\nFTL file reading not possible.\n{:?}",
-                error
+                "エラー: 埋め込まれたリソースが存在しません。\nerror: Embedded resource does not exist.\n{}",
+                ftl_filename
             );
-            std::process::exit(1);
+            return None;
         }
     };
     let ftl_resource = match FluentResource::try_new(ftl_string) {
