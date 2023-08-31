@@ -1,5 +1,4 @@
-/*
-Copyright 2023 Neuron Grid
+/* Copyright 2023 Neuron Grid
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -11,8 +10,7 @@ Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
-limitations under the License.
-*/
+limitations under the License. */
 
 mod i18n;
 extern crate rand;
@@ -236,7 +234,7 @@ fn parse_args() -> clap::ArgMatches {
                 .help(
                     "-h, --help: Prints help information.\
                     \n-V, --version: Prints version information.\
-                    \n-l, --language: Sets the language for user prompts and messages.",
+                    \n-l, --language: Specifies the language for user prompts and messages.",
                 )
                 .takes_value(false),
         )
@@ -247,8 +245,10 @@ fn parse_args() -> clap::ArgMatches {
                 .long("language")
                 .value_name("LANGUAGE")
                 .help(
-                    "Sets the language for user prompts and messages.\
-                    \nSupported Language: ja and en.",
+                    "Specifies the language for user prompts and messages.\
+                    \nSpecify the language code as defined by Iso639-3.\
+                    \nSupported languages: Japanese, English, and German.\
+                    \nDefault language: English",
                 )
                 .takes_value(true),
         )
