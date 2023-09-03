@@ -13,11 +13,11 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 mod i18n;
+extern crate clap;
 extern crate rand;
 extern crate zxcvbn;
-use clap::{App, Arg};
-use fluent::FluentValue;
-use fluent::{FluentBundle, FluentResource};
+use clap::{App, Arg, ArgMatches};
+use fluent::{FluentArgs, FluentBundle, FluentResource, FluentValue};
 use i18n::{get_translation, initialize_bundle};
 use rand::{rngs::OsRng, seq::SliceRandom};
 use std::collections::HashMap;
@@ -116,9 +116,14 @@ fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
     let default_special_characters = "!?@#$%^&*()-_=+';:,.<>/";
     // 選択に基づいて組み立てられる文字セットを一時的に格納します。
     let mut assembled_charset: String = String::new();
-    // FTLメッセージに変数を渡すためのFluentArgsを作成します。
+    /*  FTLメッセージに変数を渡すためのFluentArgsを作成します。
     let mut args: HashMap<&str, FluentValue> = HashMap::new();
     args.insert(
+        "specialChars",
+        FluentValue::from(default_special_characters),
+    );*/
+    let mut args_map: HashMap<&str, FluentValue> = HashMap::new();
+    args_map.insert(
         "specialChars",
         FluentValue::from(default_special_characters),
     );
@@ -128,26 +133,24 @@ fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
             assembled_charset += chars;
         }
     }
+    let args: FluentArgs = args_map.into_iter().collect();
     println!(
         "{}",
         get_translation(bundle, "default_special_chars_message", Some(&args))
     );
     if ask_user(
         //  翻訳キーを指定
-        // question_special_chars = "特殊文字を含めますか？",
         &get_translation(bundle, "question_special_chars", None),
         bundle,
     ) {
         loop {
             if ask_user(
                 // 翻訳キーを指定
-                // question_change_special_chars = "使用する特殊文字を変更しますか？",
                 &get_translation(bundle, "question_change_special_chars", None),
                 bundle,
             ) {
                 let special_chars_input =
                     // 翻訳キーを指定
-                    // question_enter_special_chars = "使用する特殊文字を入力してください (例 = !@#|¥)",
                     get_input(&get_translation(bundle, "question_enter_special_chars", None), bundle);
                 assembled_charset += &special_chars_input;
                 break;
@@ -161,10 +164,8 @@ fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
         println!(
             "{}",
             // 翻訳キーを指定
-            // error_no_charset_selected = "エラー: 有効な文字セットが選択されていません。
             get_translation(bundle, "error_no_charset_selected", None)
         );
-
         std::process::exit(1);
     }
     assembled_charset
@@ -184,7 +185,6 @@ fn ask_user(message: &str, bundle: &FluentBundle<FluentResource>) -> bool {
             "はい" => return true,
             "いいえ" => return false,
             // 翻訳キーを指定
-            // error_invalid_input = "無効な入力です。\nyまたはnを入力してください。\n「はい」か「いいえ」でも良いです。",
             _ => println!("{}", get_translation(bundle, "error_invalid_input", None)),
         }
     }
@@ -221,26 +221,19 @@ fn is_strong(password: &str) -> bool {
 }
 
 // ユーザーが指定した言語に基づいて、Fluentファイルの名前を返します。
-fn parse_args() -> clap::ArgMatches {
+fn parse_args() -> ArgMatches {
     App::new("rupass")
         .version(env!("CARGO_PKG_VERSION"))
         .author("Neuron Grid")
         .about("rust unique pass: Generate strong password.")
-        // --helpオプション
         .arg(
-            Arg::with_name("help")
+            Arg::new("help")
                 .short('h')
                 .long("help")
-                .help(
-                    "-h, --help: Prints help information.\
-                    \n-V, --version: Prints version information.\
-                    \n-l, --language: Specifies the language for user prompts and messages.",
-                )
-                .takes_value(false),
+                .help("-h, --help: Prints help information."), // .takes_value(false),
         )
-        // 言語設定用オプション
         .arg(
-            Arg::with_name("language")
+            Arg::new("language")
                 .short('l')
                 .long("language")
                 .value_name("LANGUAGE")
@@ -249,8 +242,7 @@ fn parse_args() -> clap::ArgMatches {
                     \nSpecify the language code as defined by Iso639-3.\
                     \nSupported languages: Japanese, English, and German.\
                     \nDefault language: English",
-                )
-                .takes_value(true),
+                ), // .takes_value(true),
         )
         .get_matches()
 }

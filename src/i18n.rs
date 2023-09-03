@@ -12,6 +12,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+extern crate clap;
 use fluent::{FluentBundle, FluentResource};
 use rust_embed::RustEmbed;
 use std::str::FromStr;
@@ -45,15 +46,21 @@ fn map_to_fluent_code(code: &str) -> LanguageIdentifier {
     }
 }
 
-// ユーザーの入力からパスワードの長さを決定します。
+// 言語設定を取得。デフォルト言語を使う場合はそれを使う。
 pub fn initialize_bundle(matches: &clap::ArgMatches) -> FluentBundle<FluentResource> {
-    let language = matches.value_of("language").unwrap_or(DEFAULT_LANGUAGE);
+    let language = matches
+        .get_one::<String>("language")
+        .map(|s| s.as_str())
+        .unwrap_or(DEFAULT_LANGUAGE);
+    // 言語バンドルをロード
     match load_fluent_bundle(language) {
         Some(bundle) => bundle,
         None => {
+            // 翻訳バンドルのロードに失敗しました。
+            // Failed to load translation bundle.
             eprintln!(
-                "翻訳バンドルのロードに失敗しました。\
-                \nFailed to load translation bundle."
+                "対応言語を確認した上で再度実行して下さい。\
+                \nPlease check the supported languages and execute again."
             );
             std::process::exit(1);
         }
@@ -69,7 +76,8 @@ fn load_fluent_bundle(language: &str) -> Option<FluentBundle<FluentResource>> {
         Some(content) => content,
         None => {
             eprintln!(
-                "エラー: 埋め込まれたリソースが存在しません。\nerror: Embedded resource does not exist.\n{}",
+                "エラー: 埋め込まれたリソースが存在しません。\
+                \nerror: Embedded resource does not exist.\n{}",
                 ftl_filename
             );
             return None;
@@ -79,17 +87,19 @@ fn load_fluent_bundle(language: &str) -> Option<FluentBundle<FluentResource>> {
         Ok(resource) => resource,
         Err(error) => {
             eprintln!(
-                "FTL文字列をパースできませんでした。\nFTL string could not be parsed.\n{:?}",
+                "FTL文字列をパースできませんでした。\
+                \nFTL string could not be parsed.\n{:?}",
                 error
             );
             std::process::exit(1);
         }
     };
     let langid = fluent_code;
-    let mut bundle = FluentBundle::new(vec![&langid]);
-    bundle
-        .add_resource(ftl_resource)
-        .expect("FTLリソースの追加に失敗しました。\nFTL resource could not be added.");
+    let mut bundle = FluentBundle::new(vec![langid]);
+    bundle.add_resource(ftl_resource).expect(
+        "FTLリソースの追加に失敗しました。\
+            \nFTL resource could not be added.",
+    );
     Some(bundle)
 }
 
@@ -99,13 +109,19 @@ pub fn get_translation(
     args: Option<&fluent::FluentArgs>,
 ) -> String {
     if let Some(message) = bundle.get_message(key) {
-        let value = match &message.value {
+        let value = match &message.value() {
             Some(v) => v,
-            None => return "翻訳が見つかりません。\nTranslation not found.".to_string(),
+            None => {
+                return "翻訳が見つかりません。\
+                    \nTranslation not found."
+                    .to_string()
+            }
         };
         let result = bundle.format_pattern(value, args, &mut vec![]);
         result.trim_matches('"').to_string()
     } else {
-        "翻訳が見つかりません。\nTranslation not found.".to_string()
+        "翻訳が見つかりません。\
+        \nTranslation not found."
+            .to_string()
     }
 }
