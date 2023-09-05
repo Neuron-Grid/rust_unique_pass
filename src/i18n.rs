@@ -12,7 +12,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
-extern crate clap;
 use fluent::{FluentBundle, FluentResource};
 use rust_embed::RustEmbed;
 use std::str::FromStr;
@@ -96,10 +95,17 @@ fn load_fluent_bundle(language: &str) -> Option<FluentBundle<FluentResource>> {
     };
     let langid = fluent_code;
     let mut bundle = FluentBundle::new(vec![langid]);
-    bundle.add_resource(ftl_resource).expect(
-        "FTLリソースの追加に失敗しました。\
-            \nFTL resource could not be added.",
-    );
+    match bundle.add_resource(ftl_resource) {
+        Ok(_) => (),
+        Err(error) => {
+            eprintln!(
+                "FTLリソースの追加に失敗しました。\
+                \nFailed to add FTL resource.\n{:?}",
+                error
+            );
+            return None;
+        }
+    };
     Some(bundle)
 }
 
@@ -120,8 +126,16 @@ pub fn get_translation(
                     .to_string()
             }
         };
-        let result = bundle.format_pattern(value, args, &mut vec![]);
+        // let result = bundle.format_pattern(value, args, &mut vec![]);
+        // result.trim_matches('"').to_string()
+        // デバック用コードを一時的に追加
+        let mut errors = vec![];
+        let result = bundle.format_pattern(value, args, &mut errors);
+        if !errors.is_empty() {
+            println!("Fluent errors: {:?}", errors);
+        }
         result.trim_matches('"').to_string()
+        // デバック用コードを一時的に追加
     } else {
         "翻訳が見つかりません。\
         \nTranslation not found."

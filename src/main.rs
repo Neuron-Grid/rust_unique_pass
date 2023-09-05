@@ -13,11 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 mod i18n;
-// extern crate clap;
-extern crate rand;
-extern crate zxcvbn;
 use clap::{Arg, ArgMatches, Command};
-// use clap::derive::{ArgEnum, Parser};
 use fluent::{FluentArgs, FluentBundle, FluentResource, FluentValue};
 use i18n::{get_translation, initialize_bundle};
 use rand::{rngs::OsRng, seq::SliceRandom};
@@ -49,7 +45,6 @@ fn get_input(prompt: &str, bundle: &FluentBundle<FluentResource>) -> String {
     let mut input = String::new();
     io::stdin()
         .read_line(&mut input)
-        // 翻訳キーを新しく作り指定する。
         .expect(&get_translation(bundle, "error_user_input", None));
     input.trim().to_string()
 }
@@ -118,42 +113,54 @@ fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
     let default_special_characters = "!?@#$%^&*()-_=+';:,.<>/";
     // 選択に基づいて組み立てられる文字セットを一時的に格納します。
     let mut assembled_charset: String = String::new();
-    /*  FTLメッセージに変数を渡すためのFluentArgsを作成します。
-    let mut args: HashMap<&str, FluentValue> = HashMap::new();
-    args.insert(
+    // FTLメッセージに変数を渡すためのFluentArgsを作成します。
+    /*let mut args_map: HashMap<&str, FluentValue> = HashMap::new();
+    args_map.insert(
         "specialChars",
         FluentValue::from(default_special_characters),
     );*/
+    // デバック用コードを一時的に追加
     let mut args_map: HashMap<&str, FluentValue> = HashMap::new();
     args_map.insert(
         "specialChars",
         FluentValue::from(default_special_characters),
     );
+    // デバッグ出力: args_mapの内容を表示
+    println!("Debug: args_map contents: {:?}", args_map);
+    let args: FluentArgs = args_map.clone().into_iter().collect();
+    // デバッグ出力: argsの内容を表示
+    println!("Debug: args contents: {:?}", args);
+    println!(
+        "{}",
+        get_translation(bundle, "default_special_chars_message", Some(&args)),
+    );
+    // デバック用コードを一時的に追加
     // 各質問に対してユーザーに尋ねる
     for (question, chars) in questions.iter() {
         if ask_user(question, bundle) {
             assembled_charset += chars;
         }
     }
-    let args: FluentArgs = args_map.into_iter().collect();
+    // let args: FluentArgs = args_map.into_iter().collect();
+    let args: FluentArgs = args_map.iter().map(|(k, v)| (*k, v.clone())).collect();
     println!(
         "{}",
-        get_translation(bundle, "default_special_chars_message", Some(&args))
+        get_translation(bundle, "default_special_chars_message", Some(&args)),
     );
+
     if ask_user(
-        //  翻訳キーを指定
         &get_translation(bundle, "question_special_chars", None),
         bundle,
     ) {
         loop {
             if ask_user(
-                // 翻訳キーを指定
                 &get_translation(bundle, "question_change_special_chars", None),
                 bundle,
             ) {
-                let special_chars_input =
-                    // 翻訳キーを指定
-                    get_input(&get_translation(bundle, "question_enter_special_chars", None), bundle);
+                let special_chars_input = get_input(
+                    &get_translation(bundle, "question_enter_special_chars", None),
+                    bundle,
+                );
                 assembled_charset += &special_chars_input;
                 break;
             } else {
@@ -165,7 +172,6 @@ fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
     if assembled_charset.is_empty() {
         println!(
             "{}",
-            // 翻訳キーを指定
             get_translation(bundle, "error_no_charset_selected", None)
         );
         std::process::exit(1);
@@ -186,7 +192,6 @@ fn ask_user(message: &str, bundle: &FluentBundle<FluentResource>) -> bool {
             // japanese
             "はい" => return true,
             "いいえ" => return false,
-            // 翻訳キーを指定
             _ => println!("{}", get_translation(bundle, "error_invalid_input", None)),
         }
     }
@@ -223,6 +228,7 @@ fn is_strong(password: &str) -> bool {
 }
 
 // ユーザーが指定した言語に基づいて、Fluentファイルの名前を返します。
+// Todo: Device APIを利用して効率化する
 fn parse_args() -> ArgMatches {
     Command::new("rupass")
         .version(env!("CARGO_PKG_VERSION"))
