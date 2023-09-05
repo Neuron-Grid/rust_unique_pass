@@ -109,7 +109,10 @@ pub fn get_translation(
     args: Option<&fluent::FluentArgs>,
 ) -> String {
     if let Some(message) = bundle.get_message(key) {
-        let value = match &message.value() {
+        // 一時的な値を長寿命の変数に格納
+        let temp_value = message.value();
+        let value = match &temp_value {
+            // ここで長寿命の変数を使用
             Some(v) => v,
             None => {
                 return "翻訳が見つかりません。\

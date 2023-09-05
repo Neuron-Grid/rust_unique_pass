@@ -13,10 +13,11 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 mod i18n;
-extern crate clap;
+// extern crate clap;
 extern crate rand;
 extern crate zxcvbn;
-use clap::{App, Arg, ArgMatches};
+use clap::{Arg, ArgMatches, Command};
+// use clap::derive::{ArgEnum, Parser};
 use fluent::{FluentArgs, FluentBundle, FluentResource, FluentValue};
 use i18n::{get_translation, initialize_bundle};
 use rand::{rngs::OsRng, seq::SliceRandom};
@@ -26,6 +27,7 @@ use std::io;
 // ユーザからの入力に基づいて強固なパスワードを生成し、表示します。
 fn main() {
     // ユーザーの引数を解析して希望の言語を決定
+    // let matches = parse_args();
     let matches = parse_args();
     // ユーザーの言語の設定に基づいて翻訳バンドルを初期化
     let bundle = initialize_bundle(&matches);
@@ -222,7 +224,7 @@ fn is_strong(password: &str) -> bool {
 
 // ユーザーが指定した言語に基づいて、Fluentファイルの名前を返します。
 fn parse_args() -> ArgMatches {
-    App::new("rupass")
+    Command::new("rupass")
         .version(env!("CARGO_PKG_VERSION"))
         .author("Neuron Grid")
         .about("rust unique pass: Generate strong password.")
@@ -230,7 +232,7 @@ fn parse_args() -> ArgMatches {
             Arg::new("help")
                 .short('h')
                 .long("help")
-                .help("-h, --help: Prints help information."), // .takes_value(false),
+                .help("-h, --help: Prints help information."),
         )
         .arg(
             Arg::new("language")
@@ -242,7 +244,7 @@ fn parse_args() -> ArgMatches {
                     \nSpecify the language code as defined by Iso639-3.\
                     \nSupported languages: Japanese, English, and German.\
                     \nDefault language: English",
-                ), // .takes_value(true),
+                ),
         )
         .get_matches()
 }
