@@ -26,7 +26,8 @@ const DEFAULT_LANGUAGE: &str = "eng";
 struct Translations;
 
 fn get_embedded_resource(filename: &str) -> Option<String> {
-    Translations::get(filename).and_then(|data| String::from_utf8(data.data.to_vec()).ok())
+    Translations::get(filename)
+        .and_then(|data: rust_embed::EmbeddedFile| String::from_utf8(data.data.to_vec()).ok())
 }
 
 fn map_to_fluent_code(code: &str) -> LanguageIdentifier {
@@ -46,10 +47,10 @@ fn map_to_fluent_code(code: &str) -> LanguageIdentifier {
 }
 
 // 言語設定を取得。デフォルト言語を使う場合はそれを使う。
-pub fn initialize_bundle(matches: &clap::ArgMatches) -> FluentBundle<FluentResource> {
-    let language = matches
+pub fn initialize_bundle(arg_match: &clap::ArgMatches) -> FluentBundle<FluentResource> {
+    let language: &str = arg_match
         .get_one::<String>("language")
-        .map(|s| s.as_str())
+        .map(|s: &String| s.as_str())
         .unwrap_or(DEFAULT_LANGUAGE);
     // 言語バンドルをロード
     match load_fluent_bundle(language) {
@@ -68,10 +69,10 @@ pub fn initialize_bundle(matches: &clap::ArgMatches) -> FluentBundle<FluentResou
 
 // 指定された言語のFTLファイルを読み込み、Fluentバンドルを返します。
 fn load_fluent_bundle(language: &str) -> Option<FluentBundle<FluentResource>> {
-    let fluent_code = map_to_fluent_code(language);
-    let ftl_filename = format!("{}.ftl", fluent_code);
+    let fluent_code: LanguageIdentifier = map_to_fluent_code(language);
+    let ftl_filename: String = format!("{}.ftl", fluent_code);
     // 埋め込まれたリソースを取得
-    let ftl_string = match get_embedded_resource(&ftl_filename) {
+    let ftl_string: String = match get_embedded_resource(&ftl_filename) {
         Some(content) => content,
         None => {
             eprintln!(
@@ -79,10 +80,10 @@ fn load_fluent_bundle(language: &str) -> Option<FluentBundle<FluentResource>> {
                 \nerror: Embedded resource does not exist.\n{}",
                 ftl_filename
             );
-            return None;
+            std::process::exit(1);
         }
     };
-    let ftl_resource = match FluentResource::try_new(ftl_string) {
+    let ftl_resource: FluentResource = match FluentResource::try_new(ftl_string) {
         Ok(resource) => resource,
         Err(error) => {
             eprintln!(
@@ -93,7 +94,7 @@ fn load_fluent_bundle(language: &str) -> Option<FluentBundle<FluentResource>> {
             std::process::exit(1);
         }
     };
-    let langid = fluent_code;
+    let langid: LanguageIdentifier = fluent_code;
     let mut bundle = FluentBundle::new(vec![langid]);
     match bundle.add_resource(ftl_resource) {
         Ok(_) => (),
@@ -103,7 +104,7 @@ fn load_fluent_bundle(language: &str) -> Option<FluentBundle<FluentResource>> {
                 \nFailed to add FTL resource.\n{:?}",
                 error
             );
-            return None;
+            std::process::exit(1);
         }
     };
     Some(bundle)
@@ -129,8 +130,8 @@ pub fn get_translation(
         // let result = bundle.format_pattern(value, args, &mut vec![]);
         // result.trim_matches('"').to_string()
         // デバック用コードを一時的に追加
-        let mut errors = vec![];
-        let result = bundle.format_pattern(value, args, &mut errors);
+        let mut errors: Vec<fluent::FluentError> = vec![];
+        let result: std::borrow::Cow<'_, str> = bundle.format_pattern(value, args, &mut errors);
         if !errors.is_empty() {
             println!("Fluent errors: {:?}", errors);
         }

@@ -13,28 +13,29 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 mod i18n;
-use clap::{Arg, ArgMatches, Command};
+
+use clap::{Arg, Parser};
 use fluent::{FluentArgs, FluentBundle, FluentResource, FluentValue};
 use i18n::{get_translation, initialize_bundle};
 use rand::{rngs::OsRng, seq::SliceRandom};
 use std::collections::HashMap;
 use std::io;
+use unic_langid::subtags::Language;
 
 // ユーザからの入力に基づいて強固なパスワードを生成し、表示します。
 fn main() {
     // ユーザーの引数を解析して希望の言語を決定
-    // let matches = parse_args();
-    let matches = parse_args();
+    let matches: RupassArgs = parse_args();
     // ユーザーの言語の設定に基づいて翻訳バンドルを初期化
     let bundle = initialize_bundle(&matches);
     // ユーザーとの対話のための翻訳されたプロンプトとメッセージを取得
     let generated_password_msg = get_translation(&bundle, "generated_password", None);
     // ユーザーの入力から希望のパスワードの長さを決定
-    let length = get_password_length(&bundle);
+    let length: usize = get_password_length(&bundle);
     // ユーザーの選択に基づいて文字セットを組み立て
-    let character_set = assemble_character_set(&bundle);
+    let character_set: String = assemble_character_set(&bundle);
     // 決定された設定を使用してセキュアなパスワードを生成
-    let password = produce_secure_password(&character_set, length);
+    let password: String = produce_secure_password(&character_set, length);
     // ユーザーに生成されたパスワードを表示
     println!("{}\n{}", generated_password_msg.as_str(), password);
 }
@@ -42,7 +43,7 @@ fn main() {
 // ユーザーからの入力を取得し、トリムして返します。
 fn get_input(prompt: &str, bundle: &FluentBundle<FluentResource>) -> String {
     println!("{}", prompt);
-    let mut input = String::new();
+    let mut input: String = String::new();
     io::stdin()
         .read_line(&mut input)
         .expect(&get_translation(bundle, "error_user_input", None));
@@ -70,9 +71,9 @@ fn validate_password_length(input: &str) -> Result<usize, PasswordLengthError> {
 fn get_password_length(bundle: &FluentBundle<FluentResource>) -> usize {
     loop {
         // プロンプトとして表示するメッセージを取得
-        let prompt = get_translation(bundle, "question_password_length", None);
+        let prompt: String = get_translation(bundle, "question_password_length", None);
         // get_inputに正しいプロンプトを渡します
-        let input = get_input(&prompt, bundle);
+        let input: String = get_input(&prompt, bundle);
         match validate_password_length(&input) {
             Ok(definitely) => return definitely,
             Err(PasswordLengthError::InvalidNumber) => {
@@ -95,7 +96,7 @@ fn get_password_length(bundle: &FluentBundle<FluentResource>) -> usize {
 // ユーザーの選択に基づいて文字セットを組み立てて返します。
 fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
     // 各質問とそれに対応する文字セットをペアとして保持します。
-    let questions = [
+    let questions: [(String, &str); 3] = [
         (
             get_translation(&bundle, "question_uppercase", None),
             "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
@@ -110,7 +111,7 @@ fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
         ),
     ];
     // デフォルトで使用される特殊文字のセットを定義します。
-    let default_special_characters = "!?@#$%^&*()-_=+';:,.<>/";
+    let default_special_characters: &str = "!?@#$%^&*()-_=+';:,.<>/";
     // 選択に基づいて組み立てられる文字セットを一時的に格納します。
     let mut assembled_charset: String = String::new();
     // FTLメッセージに変数を渡すためのFluentArgsを作成します。
@@ -157,7 +158,7 @@ fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
                 &get_translation(bundle, "question_change_special_chars", None),
                 bundle,
             ) {
-                let special_chars_input = get_input(
+                let special_chars_input: String = get_input(
                     &get_translation(bundle, "question_enter_special_chars", None),
                     bundle,
                 );
@@ -182,7 +183,7 @@ fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
 // ユーザーに質問する
 fn ask_user(message: &str, bundle: &FluentBundle<FluentResource>) -> bool {
     loop {
-        let input = get_input(message, bundle);
+        let input: String = get_input(message, bundle);
         match input.to_lowercase().as_str() {
             // english
             "y" => return true,
@@ -192,6 +193,9 @@ fn ask_user(message: &str, bundle: &FluentBundle<FluentResource>) -> bool {
             // japanese
             "はい" => return true,
             "いいえ" => return false,
+            // german
+            "ja" => return true,
+            "nein" => return false,
             _ => println!("{}", get_translation(bundle, "error_invalid_input", None)),
         }
     }
@@ -199,7 +203,7 @@ fn ask_user(message: &str, bundle: &FluentBundle<FluentResource>) -> bool {
 
 // 指定された文字セットと長さに基づいて、強力なパスワードを生成します
 fn produce_secure_password(chars: &str, length: usize) -> String {
-    let mut password;
+    let mut password: String;
     loop {
         password = assemble_random_password(chars, length);
         if is_strong(&password) {
@@ -212,7 +216,7 @@ fn produce_secure_password(chars: &str, length: usize) -> String {
 // 指定された文字セットと長さに基づいてランダムなパスワードを組み立てます。
 fn assemble_random_password(chars: &str, length: usize) -> String {
     // セキュアな乱数生成のための乱数生成器を初期化します。
-    let mut rng = OsRng;
+    let mut rng: OsRng = OsRng;
     // 文字列を char のベクタに変換します。
     let chars_vec: Vec<char> = chars.chars().collect();
     (0..length)
@@ -223,34 +227,64 @@ fn assemble_random_password(chars: &str, length: usize) -> String {
 // パスワードの強度をチェックする
 fn is_strong(password: &str) -> bool {
     // zxcvbnライブラリを使用して、パスワードの強度を評価します。
-    let result = zxcvbn::zxcvbn(password, &[]).unwrap();
+    let result: zxcvbn::Entropy = zxcvbn::zxcvbn(password, &[]).unwrap();
     result.score() > 3
 }
 
 // ユーザーが指定した言語に基づいて、Fluentファイルの名前を返します。
-// Todo: Device APIを利用して効率化する
-fn parse_args() -> ArgMatches {
-    Command::new("rupass")
-        .version(env!("CARGO_PKG_VERSION"))
-        .author("Neuron Grid")
-        .about("rust unique pass: Generate strong password.")
-        .arg(
-            Arg::new("help")
-                .short('h')
-                .long("help")
-                .help("-h, --help: Prints help information."),
-        )
-        .arg(
-            Arg::new("language")
-                .short('l')
-                .long("language")
-                .value_name("LANGUAGE")
-                .help(
-                    "Specifies the language for user prompts and messages.\
-                    \nSpecify the language code as defined by Iso639-3.\
-                    \nSupported languages: Japanese, English, and German.\
-                    \nDefault language: English",
-                ),
-        )
-        .get_matches()
+// fn parse_args() -> ArgMatches {
+//     Command::new("rupass")
+//         .version(env!("CARGO_PKG_VERSION"))
+//         .author("Neuron Grid")
+//         .about("rust unique pass: Generate strong password.")
+//         .arg(
+//             Arg::new("help")
+//                 .short('h')
+//                 .long("help")
+//                 .help("-h, --help: Prints help information."),
+//         )
+//         .arg(
+//             Arg::new("language")
+//                 .short('l')
+//                 .long("language")
+//                 .value_name("LANGUAGE")
+//                 .help(
+//                     "Specifies the language for user prompts and messages.\
+//                     \nSpecify the language code as defined by Iso639-3.\
+//                     \nSupported languages: Japanese, English, and German.\
+//                     \nDefault language: English",
+//                 ),
+//         )
+//         .get_matches()
+// }
+
+#[derive(Parser, Debug)]
+#[clap(version = env!("CARGO_PKG_VERSION"),
+    author = "Neuron Grid",
+    about = "rust unique pass: Generate strong password."
+)]
+struct RupassArgs {
+    #[clap(short, long)]
+    help: bool,
+
+    #[clap(short, long, value_name = "LANGUAGE")]
+    language: Option<Language>,
+
+    #[clap(short, long, value_name = "LENGTH")]
+    length: Option<usize>,
+}
+
+pub fn parse_args() -> RupassArgs {
+    let opt: Arg = Arg::new("language")
+        .short('l')
+        .long("language")
+        .value_name("LANGUAGE")
+        .help(
+            "Specifies the language for user prompts and messages.\
+            \nSpecify the language code as defined by Iso639-3.\
+            \nSupported languages: Japanese, English, and German.\
+            \nDefault language: English",
+        );
+    let matches: RupassArgs = RupassArgs::parse();
+    matches
 }
