@@ -259,9 +259,11 @@ fn is_strong(password: &str) -> bool {
 // }
 
 #[derive(Parser, Debug)]
-#[clap(version = env!("CARGO_PKG_VERSION"),
+#[clap(
+    version = env!("CARGO_PKG_VERSION"),
     author = "Neuron Grid",
-    about = "rust unique pass: Generate strong password."
+    about = "rust unique pass: Generate strong password.",
+    name = "Rust Unique Pass",
 )]
 struct RupassArgs {
     #[clap(short, long)]
