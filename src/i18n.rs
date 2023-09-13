@@ -12,9 +12,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+use clap::Parser;
 use fluent::{FluentBundle, FluentResource};
 use rust_embed::RustEmbed;
 use std::str::FromStr;
+use unic_langid::subtags::Language;
 use unic_langid::LanguageIdentifier;
 
 // デフォルトの言語英語に定義します。
@@ -47,11 +49,11 @@ fn map_to_fluent_code(code: &str) -> LanguageIdentifier {
 }
 
 // 言語設定を取得。デフォルト言語を使う場合はそれを使う。
-pub fn initialize_bundle(arg_match: &clap::ArgMatches) -> FluentBundle<FluentResource> {
-    let language: &str = arg_match
-        .get_one::<String>("language")
-        .map(|s: &String| s.as_str())
-        .unwrap_or(DEFAULT_LANGUAGE);
+pub fn initialize_bundle(args: &RupassArgs) -> FluentBundle<FluentResource> {
+    let language = match &args.language {
+        Some(lang) => lang.as_str(),
+        None => DEFAULT_LANGUAGE,
+    };
     // 言語バンドルをロード
     match load_fluent_bundle(language) {
         Some(bundle) => bundle,
@@ -142,4 +144,24 @@ pub fn get_translation(
         \nTranslation not found."
             .to_string()
     }
+}
+
+#[derive(Parser, Debug)]
+#[clap(
+    version = env!("CARGO_PKG_VERSION"),
+    author = "Neuron Grid",
+    about = "rust unique pass: Generate strong password.",
+    name = "Rust Unique Pass",
+)]
+pub struct RupassArgs {
+    #[clap(short, long)]
+    help: bool,
+
+    #[clap(short, long, value_name = "LANGUAGE")]
+    language: Option<Language>,
+}
+
+pub fn parse_args() -> RupassArgs {
+    let matches = RupassArgs::parse();
+    matches
 }

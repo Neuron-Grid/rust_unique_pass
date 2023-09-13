@@ -13,14 +13,11 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 mod i18n;
-
-use clap::{Arg, Parser};
 use fluent::{FluentArgs, FluentBundle, FluentResource, FluentValue};
-use i18n::{get_translation, initialize_bundle};
+use i18n::{get_translation, initialize_bundle, parse_args, RupassArgs};
 use rand::{rngs::OsRng, seq::SliceRandom};
 use std::collections::HashMap;
 use std::io;
-use unic_langid::subtags::Language;
 
 // ユーザからの入力に基づいて強固なパスワードを生成し、表示します。
 fn main() {
@@ -29,7 +26,7 @@ fn main() {
     // ユーザーの言語の設定に基づいて翻訳バンドルを初期化
     let bundle = initialize_bundle(&matches);
     // ユーザーとの対話のための翻訳されたプロンプトとメッセージを取得
-    let generated_password_msg = get_translation(&bundle, "generated_password", None);
+    let generated_password_msg: String = get_translation(&bundle, "generated_password", None);
     // ユーザーの入力から希望のパスワードの長さを決定
     let length: usize = get_password_length(&bundle);
     // ユーザーの選択に基づいて文字セットを組み立て
@@ -229,64 +226,4 @@ fn is_strong(password: &str) -> bool {
     // zxcvbnライブラリを使用して、パスワードの強度を評価します。
     let result: zxcvbn::Entropy = zxcvbn::zxcvbn(password, &[]).unwrap();
     result.score() > 3
-}
-
-// ユーザーが指定した言語に基づいて、Fluentファイルの名前を返します。
-// fn parse_args() -> ArgMatches {
-//     Command::new("rupass")
-//         .version(env!("CARGO_PKG_VERSION"))
-//         .author("Neuron Grid")
-//         .about("rust unique pass: Generate strong password.")
-//         .arg(
-//             Arg::new("help")
-//                 .short('h')
-//                 .long("help")
-//                 .help("-h, --help: Prints help information."),
-//         )
-//         .arg(
-//             Arg::new("language")
-//                 .short('l')
-//                 .long("language")
-//                 .value_name("LANGUAGE")
-//                 .help(
-//                     "Specifies the language for user prompts and messages.\
-//                     \nSpecify the language code as defined by Iso639-3.\
-//                     \nSupported languages: Japanese, English, and German.\
-//                     \nDefault language: English",
-//                 ),
-//         )
-//         .get_matches()
-// }
-
-#[derive(Parser, Debug)]
-#[clap(
-    version = env!("CARGO_PKG_VERSION"),
-    author = "Neuron Grid",
-    about = "rust unique pass: Generate strong password.",
-    name = "Rust Unique Pass",
-)]
-struct RupassArgs {
-    #[clap(short, long)]
-    help: bool,
-
-    #[clap(short, long, value_name = "LANGUAGE")]
-    language: Option<Language>,
-
-    #[clap(short, long, value_name = "LENGTH")]
-    length: Option<usize>,
-}
-
-pub fn parse_args() -> RupassArgs {
-    let opt: Arg = Arg::new("language")
-        .short('l')
-        .long("language")
-        .value_name("LANGUAGE")
-        .help(
-            "Specifies the language for user prompts and messages.\
-            \nSpecify the language code as defined by Iso639-3.\
-            \nSupported languages: Japanese, English, and German.\
-            \nDefault language: English",
-        );
-    let matches: RupassArgs = RupassArgs::parse();
-    matches
 }
