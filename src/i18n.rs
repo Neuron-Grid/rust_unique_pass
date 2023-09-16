@@ -23,14 +23,40 @@ use unic_langid::LanguageIdentifier;
 const DEFAULT_LANGUAGE: &str = "eng";
 
 #[derive(RustEmbed)]
-#[folder = "./translation/"]
+#[folder = "./translation"]
 #[include = "*.ftl"]
 struct Translations;
 
-fn get_embedded_resource(filename: &str) -> Option<String> {
+/*fn get_embedded_resource(filename: &str) -> Option<String> {
     Translations::get(filename)
         .and_then(|data: rust_embed::EmbeddedFile| String::from_utf8(data.data.to_vec()).ok())
+}*/
+// デバック用コードを一時的に追加
+fn get_embedded_resource(filename: &str) -> Option<String> {
+    match Translations::get(filename) {
+        Some(data) => match String::from_utf8(data.data.to_vec()) {
+            Ok(parsed_string) => {
+                println!("UTF-8文字列として埋め込まれたリソースの解析に成功しました。");
+                Some(parsed_string)
+            }
+            Err(e) => {
+                eprintln!(
+                    "埋め込みリソースをUTF-8文字列として解析する際にエラー発生しました。\n{:?}",
+                    e
+                );
+                None
+            }
+        },
+        None => {
+            eprintln!(
+                "ファイル名に対応する埋め込みリソースが見つかりません。\n{}",
+                filename
+            );
+            None
+        }
+    }
 }
+// デバック用コードを一時的に追加
 
 fn map_to_fluent_code(code: &str) -> LanguageIdentifier {
     match LanguageIdentifier::from_str(code) {
@@ -79,7 +105,8 @@ fn load_fluent_bundle(language: &str) -> Option<FluentBundle<FluentResource>> {
         None => {
             eprintln!(
                 "エラー: 埋め込まれたリソースが存在しません。\
-                \nerror: Embedded resource does not exist.\n{}",
+                \nerror: Embedded resource does not exist.\
+                \n{}",
                 ftl_filename
             );
             std::process::exit(1);
@@ -90,7 +117,8 @@ fn load_fluent_bundle(language: &str) -> Option<FluentBundle<FluentResource>> {
         Err(error) => {
             eprintln!(
                 "FTL文字列をパースできませんでした。\
-                \nFTL string could not be parsed.\n{:?}",
+                \nFTL string could not be parsed.\
+                \n{:?}",
                 error
             );
             std::process::exit(1);
@@ -103,7 +131,8 @@ fn load_fluent_bundle(language: &str) -> Option<FluentBundle<FluentResource>> {
         Err(error) => {
             eprintln!(
                 "FTLリソースの追加に失敗しました。\
-                \nFailed to add FTL resource.\n{:?}",
+                \nFailed to add FTL resource.\
+                \n{:?}",
                 error
             );
             std::process::exit(1);
@@ -152,12 +181,18 @@ pub fn get_translation(
     author = "Neuron Grid",
     about = "rust unique pass: Generate strong password.",
     name = "Rust Unique Pass",
+    bin_name = "rupass",
 )]
 pub struct RupassArgs {
-    #[clap(short, long)]
-    help: bool,
-
-    #[clap(short, long, value_name = "LANGUAGE")]
+    #[clap(
+        short = 'l',
+        long = "language",
+        value_name = "LANGUAGE",
+        help = "Specifies the language for user prompts and messages.\
+            \nSpecify the language code as defined by Iso639-3.\
+            \nSupported languages: Japanese, English, and German.\
+            \nDefault language: English"
+    )]
     language: Option<Language>,
 }
 

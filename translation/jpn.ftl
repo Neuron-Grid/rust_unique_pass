@@ -11,7 +11,7 @@ error_invalid_number = "有効な数値を入力してください。"
 error_bundle_load = "翻訳バンドルのロードに失敗しました。"
 read_error = "読み込みに失敗しました。"
 error_parse = "解析に失敗しました。"
-error_password_too_short = "パスワードは12文字以上を推奨します。"
+error_password_too_short = "パスワードは15文字以上を推奨します。"
 
 # Questions and prompts
 error_no_charset_selected = "エラー: 有効な文字セットが選択されていません。
@@ -19,7 +19,7 @@ error_no_charset_selected = "エラー: 有効な文字セットが選択され�
  再度実行し、指示に従ってください。"
 question_enter_special_chars = "使用する特殊文字を入力してください (例 = !@#|¥)"
 question_password_length = "パスワードの長さを入力してください。
- 12文字以上を推奨します。"
+ 15文字以上を推奨します。"
 question_change_special_chars = "使用する特殊文字を変更しますか？"
 question_special_chars = "特殊文字を含めますか？"
 question_lowercase = "小文字を含めますか？"

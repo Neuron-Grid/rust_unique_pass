@@ -65,7 +65,7 @@ fn validate_password_length(input: &str) -> Result<usize, PasswordLengthError> {
 }
 
 // ユーザーにパスワードの長さを聞き、その長さを返す。
-fn get_password_length(bundle: &FluentBundle<FluentResource>) -> usize {
+pub fn get_password_length(bundle: &FluentBundle<FluentResource>) -> usize {
     loop {
         // プロンプトとして表示するメッセージを取得
         let prompt: String = get_translation(bundle, "question_password_length", None);
@@ -74,12 +74,10 @@ fn get_password_length(bundle: &FluentBundle<FluentResource>) -> usize {
         match validate_password_length(&input) {
             Ok(definitely) => return definitely,
             Err(PasswordLengthError::InvalidNumber) => {
-                // 翻訳キーのerror_invalid_numberを表示させる。
                 println!("{}", get_translation(bundle, "error_invalid_number", None));
                 continue;
             }
             Err(PasswordLengthError::TooShort) => {
-                // 翻訳キーのerror_password_too_shortを表示させる。
                 println!(
                     "{}",
                     get_translation(bundle, "error_password_too_short", None)
@@ -91,7 +89,7 @@ fn get_password_length(bundle: &FluentBundle<FluentResource>) -> usize {
 }
 
 // ユーザーの選択に基づいて文字セットを組み立てて返します。
-fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
+pub fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
     // 各質問とそれに対応する文字セットをペアとして保持します。
     let questions: [(String, &str); 3] = [
         (
@@ -107,9 +105,9 @@ fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
             "0123456789",
         ),
     ];
-    // デフォルトで使用される特殊文字のセットを定義します。
+    // デフォルトで使用される特殊文字のセットの定義
     let default_special_characters: &str = "!?@#$%^&*()-_=+';:,.<>/";
-    // 選択に基づいて組み立てられる文字セットを一時的に格納します。
+    // 選択に基づいて組み立てられる文字セットを一時的に格納する。
     let mut assembled_charset: String = String::new();
     // FTLメッセージに変数を渡すためのFluentArgsを作成します。
     /*let mut args_map: HashMap<&str, FluentValue> = HashMap::new();
@@ -145,7 +143,6 @@ fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
         "{}",
         get_translation(bundle, "default_special_chars_message", Some(&args)),
     );
-
     if ask_user(
         &get_translation(bundle, "question_special_chars", None),
         bundle,
@@ -199,7 +196,7 @@ fn ask_user(message: &str, bundle: &FluentBundle<FluentResource>) -> bool {
 }
 
 // 指定された文字セットと長さに基づいて、強力なパスワードを生成します
-fn produce_secure_password(chars: &str, length: usize) -> String {
+pub fn produce_secure_password(chars: &str, length: usize) -> String {
     let mut password: String;
     loop {
         password = assemble_random_password(chars, length);

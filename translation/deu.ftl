@@ -6,20 +6,19 @@
 error_invalid_input = "Ungültige Eingabe.
  bitte geben Sie y oder n ein."
 error_invalid_number = "Bitte geben Sie eine gültige Nummer ein."
-error_password_too_short = "Es wird empfohlen, für Passwörter mindestens 12 Zeichen zu verwenden."
+error_password_too_short = "Es wird empfohlen, für Passwörter mindestens 15 Zeichen zu verwenden."
 error_user_input = "Zeile des Benutzers konnte nicht gelesen werden."
 error_parse = "Parsen fehlgeschlagen."
 read_error = "Konnte nicht geladen werden."
-error_parse = "Die Analyse ist fehlgeschlagen."
 error_bundle_load = "Übersetzungsbündel konnte nicht geladen werden."
 
 # Questions and prompts
 error_no_charset_selected  = "Fehler: Es wurde kein gültiger Zeichensatz ausgewählt.
- Um einen Zeichensatz auszuwählen, antworten Sie auf mindestens eine Frage mit y oder yes.
+ Bitte beantworten Sie mindestens eine Frage mit "y" oder "ja", um einen Zeichensatz auszuwählen.
  Starten Sie erneut und folgen Sie den Anweisungen."
 question_enter_special_chars = "Geben Sie die Sonderzeichen ein, die Sie verwenden möchten. (z. B. = ! @#|¥)"
 question_password_length = "Geben Sie die Länge Ihres Passworts ein.
- Es wird ein Minimum von 12 Zeichen empfohlen."
+ Es wird ein Minimum von 15 Zeichen empfohlen."
 question_change_special_chars = "Möchten Sie die verwendeten Sonderzeichen ändern?"
 question_special_chars = "Verwenden Sie Sonderzeichen?"
 question_lowercase = "Verwenden Sie Kleinbuchstaben?"
