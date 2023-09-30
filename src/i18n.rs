@@ -19,7 +19,7 @@ use std::str::FromStr;
 use unic_langid::subtags::Language;
 use unic_langid::LanguageIdentifier;
 
-// デフォルトの言語英語に定義します。
+// デフォルト言語を定義
 const DEFAULT_LANGUAGE: &str = "eng";
 
 #[derive(RustEmbed)]
@@ -27,36 +27,10 @@ const DEFAULT_LANGUAGE: &str = "eng";
 #[include = "*.ftl"]
 struct Translations;
 
-/*fn get_embedded_resource(filename: &str) -> Option<String> {
+fn get_embedded_resource(filename: &str) -> Option<String> {
     Translations::get(filename)
         .and_then(|data: rust_embed::EmbeddedFile| String::from_utf8(data.data.to_vec()).ok())
-}*/
-// デバック用コードを一時的に追加
-fn get_embedded_resource(filename: &str) -> Option<String> {
-    match Translations::get(filename) {
-        Some(data) => match String::from_utf8(data.data.to_vec()) {
-            Ok(parsed_string) => {
-                println!("UTF-8文字列として埋め込まれたリソースの解析に成功しました。");
-                Some(parsed_string)
-            }
-            Err(e) => {
-                eprintln!(
-                    "埋め込みリソースをUTF-8文字列として解析する際にエラー発生しました。\n{:?}",
-                    e
-                );
-                None
-            }
-        },
-        None => {
-            eprintln!(
-                "ファイル名に対応する埋め込みリソースが見つかりません。\n{}",
-                filename
-            );
-            None
-        }
-    }
 }
-// デバック用コードを一時的に追加
 
 fn map_to_fluent_code(code: &str) -> LanguageIdentifier {
     match LanguageIdentifier::from_str(code) {
@@ -76,7 +50,7 @@ fn map_to_fluent_code(code: &str) -> LanguageIdentifier {
 
 // 言語設定を取得。デフォルト言語を使う場合はそれを使う。
 pub fn initialize_bundle(args: &RupassArgs) -> FluentBundle<FluentResource> {
-    let language = match &args.language {
+    let language: &str = match &args.language {
         Some(lang) => lang.as_str(),
         None => DEFAULT_LANGUAGE,
     };
@@ -158,13 +132,17 @@ pub fn get_translation(
                     .to_string()
             }
         };
-        // let result = bundle.format_pattern(value, args, &mut vec![]);
-        // result.trim_matches('"').to_string()
+        let result = bundle.format_pattern(value, args, &mut vec![]);
+        result.trim_matches('"').to_string();
         // デバック用コードを一時的に追加
         let mut errors: Vec<fluent::FluentError> = vec![];
         let result: std::borrow::Cow<'_, str> = bundle.format_pattern(value, args, &mut errors);
         if !errors.is_empty() {
-            println!("Fluent errors: {:?}", errors);
+            println!(
+                "Fluent errors\
+                \n{:?}",
+                errors
+            );
         }
         result.trim_matches('"').to_string()
         // デバック用コードを一時的に追加
@@ -179,11 +157,12 @@ pub fn get_translation(
 #[clap(
     version = env!("CARGO_PKG_VERSION"),
     author = "Neuron Grid",
-    about = "rust unique pass: Generate strong password.",
+    about = "Rust Unique Pass: Generate strong password.",
     name = "Rust Unique Pass",
     bin_name = "rupass",
 )]
 pub struct RupassArgs {
+    // 設定言語を指定する
     #[clap(
         short = 'l',
         long = "language",
@@ -194,6 +173,35 @@ pub struct RupassArgs {
             \nDefault language: English"
     )]
     language: Option<Language>,
+    // 大文字を含めるかどうかを尋ねる
+    /*#[clap(
+        short = 'u',
+        long = "uppercase",
+        help = "Include uppercase letters in the password."
+    )]
+    uppercase: bool,
+    // 小文字を含めるかどうかを尋ねる
+    #[clap(
+        short = 'c',
+        long = "lowercase",
+        help = "Include lowercase letters in the password."
+    )]
+    lowercase: bool,
+    // 数字を含めるかどうかを尋ねる
+    #[clap(
+        short = 'n',
+        long = "numbers",
+        help = "Include numbers in the password."
+    )]
+    numbers: bool,
+    // 記号(特殊記号)を含めるかどうかを尋ねる
+    #[clap(
+        short = 's',
+        long = "symbols",
+        help = "Include symbols in the password."
+    )]
+    symbols: bool,
+    */
 }
 
 pub fn parse_args() -> RupassArgs {

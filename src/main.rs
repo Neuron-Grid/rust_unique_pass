@@ -105,43 +105,46 @@ pub fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
             "0123456789",
         ),
     ];
-    // デフォルトで使用される特殊文字のセットの定義
-    let default_special_characters: &str = "!?@#$%^&*()-_=+';:,.<>/";
-    // 選択に基づいて組み立てられる文字セットを一時的に格納する。
     let mut assembled_charset: String = String::new();
-    // FTLメッセージに変数を渡すためのFluentArgsを作成します。
-    /*let mut args_map: HashMap<&str, FluentValue> = HashMap::new();
-    args_map.insert(
-        "specialChars",
-        FluentValue::from(default_special_characters),
-    );*/
-    // デバック用コードを一時的に追加
-    let mut args_map: HashMap<&str, FluentValue> = HashMap::new();
-    args_map.insert(
-        "specialChars",
-        FluentValue::from(default_special_characters),
-    );
-    // デバッグ出力: args_mapの内容を表示
-    println!("Debug: args_map contents: {:?}", args_map);
-    let args: FluentArgs = args_map.clone().into_iter().collect();
-    // デバッグ出力: argsの内容を表示
-    println!("Debug: args contents: {:?}", args);
-    println!(
-        "{}",
-        get_translation(bundle, "default_special_chars_message", Some(&args)),
-    );
-    // デバック用コードを一時的に追加
-    // 各質問に対してユーザーに尋ねる
     for (question, chars) in questions.iter() {
         if ask_user(question, bundle) {
             assembled_charset += chars;
         }
     }
-    // let args: FluentArgs = args_map.into_iter().collect();
+    let special_characters_set: String = handle_special_characters(bundle);
+    if !special_characters_set.is_empty() {
+        assembled_charset += &special_characters_set;
+    }
+    if assembled_charset.is_empty() {
+        println!(
+            "{}",
+            get_translation(bundle, "error_no_charset_selected", None)
+        );
+        std::process::exit(1);
+    }
+    assembled_charset
+}
+
+fn handle_special_characters(bundle: &FluentBundle<FluentResource>) -> String {
+    // デフォルトで使用される特殊文字のセットの定義
+    let default_special_characters: &str = "!?@#$%^&*()-_=+';:,.<>/";
+    // 選択に基づいて組み立てられる文字セットを一時的に格納する。
+    let mut args_map: HashMap<&str, FluentValue> = HashMap::new();
+    args_map.insert(
+        "specialChars",
+        FluentValue::from(default_special_characters as &str),
+    );
+    // デバッグ用コードを一時的に追加
+    // デバッグ出力: args_mapの内容を表示
+    println!("Debug: args_map contents: {:?}", args_map);
+    let args: FluentArgs = args_map.clone().into_iter().collect();
+    // デバッグ出力: argsの内容を表示
+    println!("Debug: args contents: {:?}", args);
+    // デバッグ用コードを一時的に追加
     let args: FluentArgs = args_map.iter().map(|(k, v)| (*k, v.clone())).collect();
     println!(
         "{}",
-        get_translation(bundle, "default_special_chars_message", Some(&args)),
+        &get_translation(bundle, "default_special_chars_message", Some(&args)),
     );
     if ask_user(
         &get_translation(bundle, "question_special_chars", None),
@@ -156,22 +159,13 @@ pub fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
                     &get_translation(bundle, "question_enter_special_chars", None),
                     bundle,
                 );
-                assembled_charset += &special_chars_input;
-                break;
+                return special_chars_input;
             } else {
-                assembled_charset += default_special_characters;
-                break;
+                return default_special_characters.to_string();
             }
         }
     }
-    if assembled_charset.is_empty() {
-        println!(
-            "{}",
-            get_translation(bundle, "error_no_charset_selected", None)
-        );
-        std::process::exit(1);
-    }
-    assembled_charset
+    "".to_string()
 }
 
 // ユーザーに質問する
@@ -211,16 +205,15 @@ pub fn produce_secure_password(chars: &str, length: usize) -> String {
 fn assemble_random_password(chars: &str, length: usize) -> String {
     // セキュアな乱数生成のための乱数生成器を初期化します。
     let mut rng: OsRng = OsRng;
-    // 文字列を char のベクタに変換します。
+    // 文字列をcharのベクタに変換します。
     let chars_vec: Vec<char> = chars.chars().collect();
     (0..length)
         .map(|_| *chars_vec.choose(&mut rng).unwrap())
         .collect()
 }
 
-// パスワードの強度をチェックする
+// zxcvbnライブラリを使用して、パスワードの強度を評価します。
 fn is_strong(password: &str) -> bool {
-    // zxcvbnライブラリを使用して、パスワードの強度を評価します。
     let result: zxcvbn::Entropy = zxcvbn::zxcvbn(password, &[]).unwrap();
     result.score() > 3
 }
