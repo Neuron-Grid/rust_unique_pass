@@ -27,7 +27,7 @@ question_uppercase = "大文字を含めますか？"
 question_numbers = "数字を含めますか？"
 
 # default messages
-default_special_chars_message = "デフォルトで使用される特殊文字は{specialChars}です。"
+default_special_chars_message = "デフォルトで使用される特殊文字は{ $specialChars }です。"
 
 # Other messages
 generated_password = "パスワードが生成されました。"

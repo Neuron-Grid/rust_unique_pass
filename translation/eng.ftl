@@ -26,7 +26,7 @@ question_special_chars = "Include special characters?"
 question_uppercase = "Include uppercase letters?"
 
 # default messages
-default_special_chars_message = "The special character used by default is {specialChars}."
+default_special_chars_message = "The special character used by default is { $specialChars }."
 
 # Other messages
 generated_password = "Password Generation Result"

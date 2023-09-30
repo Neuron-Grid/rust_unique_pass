@@ -26,7 +26,7 @@ question_uppercase = "Möchten Sie Großbuchstaben verwenden?"
 question_numbers = "Verwenden Sie Zahlen?"
 
 # default messages
-default_special_chars_message = "Das standardmäßig verwendete Sonderzeichen ist {specialChars}.
+default_special_chars_message = "Das standardmäßig verwendete Sonderzeichen ist { $specialChars }.
 
 # Other messages
 generated_password = "Das Passwort wurde generiert."

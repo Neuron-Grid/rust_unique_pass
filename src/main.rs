@@ -132,15 +132,9 @@ fn handle_special_characters(bundle: &FluentBundle<FluentResource>) -> String {
     let mut args_map: HashMap<&str, FluentValue> = HashMap::new();
     args_map.insert(
         "specialChars",
-        FluentValue::from(default_special_characters as &str),
+        FluentValue::from(default_special_characters),
     );
-    // デバッグ用コードを一時的に追加
-    // デバッグ出力: args_mapの内容を表示
-    println!("Debug: args_map contents: {:?}", args_map);
-    let args: FluentArgs = args_map.clone().into_iter().collect();
-    // デバッグ出力: argsの内容を表示
-    println!("Debug: args contents: {:?}", args);
-    // デバッグ用コードを一時的に追加
+    // FluentArgs の作成
     let args: FluentArgs = args_map.iter().map(|(k, v)| (*k, v.clone())).collect();
     println!(
         "{}",
