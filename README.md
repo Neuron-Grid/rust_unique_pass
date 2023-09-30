@@ -20,7 +20,6 @@ CLIアプリなのでコマンドラインから実行してください。<br>
 ## 注意事項
 - デフォルトの言語設定は英語です。
 - 言語は`-l`オプションで変更できます。
-- 一部で`{specialChars}`と表示される不具合があります。
 
 ## 実行方法
 `Rust`がインストールされていることを確認してください。<br>
@@ -34,6 +33,14 @@ cd /target/release/ && \
 ./rupass
 ```
 
+## 言語設定について
+ISO 639-3で定義されている言語コードを指定してください。<br>
+コマンドを下記のようにすることで日本語で利用できます。
+```
+./rupass -l jpn
+```
+ドイツ語の場合はdeuを指定してください。
+
 ## 今後の予定
 - **パスワードの強度推定機能**
   - `zxcvbn`を利用して実装
@@ -44,8 +51,12 @@ cd /target/release/ && \
 -  `zxcvbn` licensed under the MIT License.
 
 GitHub repository
+> [clap](ttps://github.com/clap-rs/clap)<br>
+> [fluent-rs](https://github.com/projectfluent/fluent-rs)<br>
 > [rand](https://github.com/rust-random/rand)<br>
-> [zxcvbn-rs](https://github.com/shssoichiro/zxcvbn-rs)
+> [rust-embed](https://github.com/pyrossh/rust-embed)<br>
+> [unic-locale](https://github.com/zbraniecki/unic-locale)<br>
+> [zxcvbn-rs](https://github.com/shssoichiro/zxcvbn-rs)<br>
 
 ## ライセンス
 このソフトウェアは`Apache License 2.0`の下で公開されています。<br>

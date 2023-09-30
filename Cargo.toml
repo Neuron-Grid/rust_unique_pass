@@ -5,12 +5,12 @@ version = "0.6.0"
 edition = "2021"
 
 [dependencies]
-clap = { version = "4.4.3", features = ["derive"] }
+clap = { version = "4.4.6", features = ["derive"] }
 fluent = "0.16.0"
 rand = "0.8.5"
+rust-embed = { version = "8.0.0", features = ["include-exclude"] }
 unic-langid = "0.9.1"
 zxcvbn = "2.2.2"
-rust-embed = { version = "8.0.0", features = ["include-exclude"] }
 
 [[bin]]
 name = "rupass"
