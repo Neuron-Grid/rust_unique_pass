@@ -51,7 +51,7 @@ GitHub repository
 
 ## License
 このソフトウェアは`Apache License 2.0`の下で公開されています。<br>
-詳細は[LICENSE](./LICENSE)をご覧ください。
+詳細は[LICENSE](../LICENSE)をご覧ください。
 
 Copyright © 2023 Neuron Grid. <br>
 Licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
