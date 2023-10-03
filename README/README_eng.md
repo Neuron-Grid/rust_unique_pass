@@ -1,4 +1,4 @@
-## Rust unique pass
+## Rust Unique Pass
 This software is designed to generate random strong passwords.<br>
 Users can customize the length of their passwords and the special characters they use.<br>
 Except for the FTL files for translation, everything is written in the Rust language.
