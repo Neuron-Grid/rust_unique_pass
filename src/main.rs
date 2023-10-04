@@ -26,7 +26,8 @@ fn main() {
     // ユーザーの言語の設定に基づいて翻訳バンドルを初期化
     let bundle = initialize_bundle(&matches);
     // ユーザーとの対話のための翻訳されたプロンプトとメッセージを取得
-    let generated_password_msg: String = get_translation(&bundle, "generated_password", None);
+    let generated_password_msg: String =
+        get_translation(&bundle, "generated_password", None).unwrap();
     // ユーザーの入力から希望のパスワードの長さを決定
     let length: usize = get_password_length(&bundle);
     // ユーザーの選択に基づいて文字セットを組み立て
@@ -43,7 +44,7 @@ fn get_input(prompt: &str, bundle: &FluentBundle<FluentResource>) -> String {
     let mut input: String = String::new();
     io::stdin()
         .read_line(&mut input)
-        .expect(&get_translation(bundle, "error_user_input", None));
+        .expect(&get_translation(bundle, "error_user_input", None).unwrap());
     input.trim().to_string()
 }
 
@@ -68,19 +69,22 @@ fn validate_password_length(input: &str) -> Result<usize, PasswordLengthError> {
 pub fn get_password_length(bundle: &FluentBundle<FluentResource>) -> usize {
     loop {
         // プロンプトとして表示するメッセージを取得
-        let prompt: String = get_translation(bundle, "question_password_length", None);
+        let prompt: String = get_translation(bundle, "question_password_length", None).unwrap();
         // get_inputに正しいプロンプトを渡します
         let input: String = get_input(&prompt, bundle);
         match validate_password_length(&input) {
             Ok(definitely) => return definitely,
             Err(PasswordLengthError::InvalidNumber) => {
-                println!("{}", get_translation(bundle, "error_invalid_number", None));
+                println!(
+                    "{}",
+                    get_translation(bundle, "error_invalid_number", None).unwrap()
+                );
                 continue;
             }
             Err(PasswordLengthError::TooShort) => {
                 println!(
                     "{}",
-                    get_translation(bundle, "error_password_too_short", None)
+                    get_translation(bundle, "error_password_too_short", None).unwrap()
                 );
                 continue;
             }
@@ -93,15 +97,15 @@ pub fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
     // 各質問とそれに対応する文字セットをペアとして保持します。
     let questions: [(String, &str); 3] = [
         (
-            get_translation(&bundle, "question_uppercase", None),
+            get_translation(&bundle, "question_uppercase", None).unwrap(),
             "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
         ),
         (
-            get_translation(&bundle, "question_lowercase", None),
+            get_translation(&bundle, "question_lowercase", None).unwrap(),
             "abcdefghijklmnopqrstuvwxyz",
         ),
         (
-            get_translation(&bundle, "question_numbers", None),
+            get_translation(&bundle, "question_numbers", None).unwrap(),
             "0123456789",
         ),
     ];
@@ -118,7 +122,7 @@ pub fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
     if assembled_charset.is_empty() {
         println!(
             "{}",
-            get_translation(bundle, "error_no_charset_selected", None)
+            get_translation(bundle, "error_no_charset_selected", None).unwrap()
         );
         std::process::exit(1);
     }
@@ -138,19 +142,19 @@ fn handle_special_characters(bundle: &FluentBundle<FluentResource>) -> String {
     let args: FluentArgs = args_map.iter().map(|(k, v)| (*k, v.clone())).collect();
     println!(
         "{}",
-        &get_translation(bundle, "default_special_chars_message", Some(&args)),
+        &get_translation(bundle, "default_special_chars_message", Some(&args)).unwrap(),
     );
     if ask_user(
-        &get_translation(bundle, "question_special_chars", None),
+        &get_translation(bundle, "question_special_chars", None).unwrap(),
         bundle,
     ) {
         loop {
             if ask_user(
-                &get_translation(bundle, "question_change_special_chars", None),
+                &get_translation(bundle, "question_change_special_chars", None).unwrap(),
                 bundle,
             ) {
                 let special_chars_input: String = get_input(
-                    &get_translation(bundle, "question_enter_special_chars", None),
+                    &get_translation(bundle, "question_enter_special_chars", None).unwrap(),
                     bundle,
                 );
                 return special_chars_input;
@@ -178,7 +182,10 @@ fn ask_user(message: &str, bundle: &FluentBundle<FluentResource>) -> bool {
             // german
             "ja" => return true,
             "nein" => return false,
-            _ => println!("{}", get_translation(bundle, "error_invalid_input", None)),
+            _ => println!(
+                "{}",
+                get_translation(bundle, "error_invalid_input", None).unwrap()
+            ),
         }
     }
 }

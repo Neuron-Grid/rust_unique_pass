@@ -119,37 +119,23 @@ pub fn get_translation(
     bundle: &FluentBundle<FluentResource>,
     key: &str,
     args: Option<&fluent::FluentArgs>,
-) -> String {
+) -> Result<String, String> {
     if let Some(message) = bundle.get_message(key) {
-        // 一時的な値を長寿命の変数に格納
         let temp_value = message.value();
         let value = match &temp_value {
-            // ここで長寿命の変数を使用
             Some(v) => v,
             None => {
-                return "翻訳が見つかりません。\
-                    \nTranslation not found."
-                    .to_string()
+                return Err("翻訳が見つかりません。\nTranslation not found.".to_string());
             }
         };
-        let result = bundle.format_pattern(value, args, &mut vec![]);
-        result.trim_matches('"').to_string();
-        // デバック用コードを一時的に追加
         let mut errors: Vec<fluent::FluentError> = vec![];
         let result: std::borrow::Cow<'_, str> = bundle.format_pattern(value, args, &mut errors);
         if !errors.is_empty() {
-            println!(
-                "Fluent errors\
-                \n{:?}",
-                errors
-            );
+            println!("Fluent errors\n{:?}", errors);
         }
-        result.trim_matches('"').to_string()
-        // デバック用コードを一時的に追加
+        Ok(result.trim_matches('"').to_string())
     } else {
-        "翻訳が見つかりません。\
-        \nTranslation not found."
-            .to_string()
+        Err("翻訳が見つかりません。\nTranslation not found.".to_string())
     }
 }
 
@@ -174,7 +160,8 @@ pub struct RupassArgs {
     )]
     language: Option<Language>,
     // 大文字を含めるかどうかを尋ねる
-    /*#[clap(
+    /*
+    #[clap(
         short = 'u',
         long = "uppercase",
         help = "Include uppercase letters in the password."
