@@ -3,6 +3,9 @@
 name = "rust_unique_pass"
 version = "0.6.0"
 edition = "2021"
+license = "Apache-2.0"
+description = "A library for generating unique passwords in Rust"
+readme = "READEME.md"
 
 [dependencies]
 clap = { version = "4.4.6", features = ["derive"] }
@@ -11,10 +14,6 @@ rand = "0.8.5"
 rust-embed = { version = "8.0.0", features = ["include-exclude"] }
 unic-langid = "0.9.1"
 zxcvbn = "2.2.2"
-
-[description]
-license = "Apache License 2.0"
-description = "A library for generating unique passwords in Rust"
 
 [[bin]]
 name = "rupass"
