@@ -3,7 +3,7 @@ This software is designed to generate random strong passwords.<br>
 Users can customize the length of their passwords and the special characters they use.<br>
 Except for the FTL files for translation, everything is written in the Rust language.
 
-## Useage
+## usage
 See `execution method` in the next section.<br>
 It is a CLI tool and should be run from the command line.<br>
 The command name is `rupass`.<br>

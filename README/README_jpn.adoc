@@ -1,0 +1,67 @@
+= Rust Unique Pass
+
+このソフトウェアは、ランダムな強力なパスワードを生成するためのものです。
+利用者はパスワードの長さや使用する特殊文字などをカスタマイズすることができます。
+翻訳用のFTLファイル以外は全てRust言語で書かれています。
+
+== 使い方
+[%hardbreaks]
+下記の *実行方法* を参照してください。
+CLIツールなのでコマンドラインから実行してください。
+コマンド名は `rupass` です。
+
+=== 強制終了する方法について
+- macOSの場合: `control` + `c`を押してください。
+- Windowsの場合: `Ctrl` + `c`を押してください。
+
+[Warning]
+====
+デフォルトの言語は英語です。
+====
+
+== 実行方法
+事前に `Rust` がインストールされていることを確認してください。
+インストールされていない場合は、link:https://www.rust-lang.org/[Rustの公式サイト]を参照してください。
+
+
+[source,zsh]
+----
+git clone https://github.com/Neuron-Grid/rust_unique_pass && \
+cd rust_unique_pass && \
+cargo build --release && \
+cd /target/release/ && \
+./rupass
+----
+
+== 言語について
+*対応言語*::
+日本語:::
+英語:::
+ドイツ語:::
+
+[%hardbreaks]
+`ISO 639-3` で定義されている言語コードを指定してください。
+コマンドを下記のようにすることで日本語で利用できます。
+
+[source,zsh]
+--
+./rupass -l jpn
+--
+
+== このソフトウェアは以下のクレートを利用しています
+GitHub repository 
+[%hardbreaks]
+- link:https://github.com/clap-rs/clap[clap]
+- link:https://github.com/projectfluent/fluent-rs[fluent-rs]
+- link:https://github.com/rust-random/rand[rand]
+- link:https://github.com/pyrosseh/rust-embed[rust-embed]
+- link:https://github.com/zbraniecki/unic-locale[unic-locale]
+- link:https://github.com/shssoichiro/zxcvbn-rs[zxcvbn-rs]
+
+== License
+このソフトウェアはApache License 2.0の下で公開されています。
+詳細はlink:../LICENSE[LICENSE]をご覧ください。
+
+[%hardbreaks]
+Copyright © 2023 Neuron Grid. 
+Licensed under the link:https://www.apache.org/licenses/LICENSE-2.0[Apache License 2.0].

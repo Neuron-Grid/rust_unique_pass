@@ -125,17 +125,25 @@ pub fn get_translation(
         let value = match &temp_value {
             Some(v) => v,
             None => {
-                return Err("翻訳が見つかりません。\nTranslation not found.".to_string());
+                return Err("翻訳が見つかりません。\
+                    \nTranslation not found."
+                    .to_string());
             }
         };
         let mut errors: Vec<fluent::FluentError> = vec![];
         let result: std::borrow::Cow<'_, str> = bundle.format_pattern(value, args, &mut errors);
         if !errors.is_empty() {
-            println!("Fluent errors\n{:?}", errors);
+            println!(
+                "Fluent errors\
+                \n{:?}",
+                errors
+            );
         }
         Ok(result.trim_matches('"').to_string())
     } else {
-        Err("翻訳が見つかりません。\nTranslation not found.".to_string())
+        Err("翻訳が見つかりません。\
+        \nTranslation not found."
+            .to_string())
     }
 }
 
@@ -147,6 +155,7 @@ pub fn get_translation(
     name = "Rust Unique Pass",
     bin_name = "rupass",
 )]
+
 pub struct RupassArgs {
     // 設定言語を指定する
     #[clap(
@@ -159,8 +168,8 @@ pub struct RupassArgs {
             \nDefault language: English"
     )]
     language: Option<Language>,
-    // 大文字を含めるかどうかを尋ねる
     /*
+    // 大文字を含めるかどうかを尋ねる
     #[clap(
         short = 'u',
         long = "uppercase",
@@ -185,7 +194,7 @@ pub struct RupassArgs {
     #[clap(
         short = 's',
         long = "symbols",
-        help = "Include symbols in the password."
+        help = "Include special symbols in passwords."
     )]
     symbols: bool,
     */

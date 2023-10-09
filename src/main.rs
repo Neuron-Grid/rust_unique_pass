@@ -184,7 +184,7 @@ fn ask_user(message: &str, bundle: &FluentBundle<FluentResource>) -> bool {
             "nein" => return false,
             _ => println!(
                 "{}",
-                get_translation(bundle, "error_invalid_input", None).unwrap()
+                get_translation(bundle, "error_invalid_input", None).unwrap(),
             ),
         }
     }
