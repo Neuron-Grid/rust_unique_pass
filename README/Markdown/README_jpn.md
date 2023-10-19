@@ -42,7 +42,7 @@ ISO 639-3で定義されている言語コードを指定してください。<b
 
 ## このソフトウェアは以下のクレートを利用しています
 GitHub repository
-- [clap](ttps://github.com/clap-rs/clap)<br>
+- [clap](https://github.com/clap-rs/clap)<br>
 - [fluent-rs](https://github.com/projectfluent/fluent-rs)<br>
 - [rand](https://github.com/rust-random/rand)<br>
 - [rust-embed](https://github.com/pyrossh/rust-embed)<br>

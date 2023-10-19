@@ -43,7 +43,7 @@ The command can be used in Japanese by making the following changes.
 
 ## This software utilizes the following crates
 GitHub repository
-- [clap](ttps://github.com/clap-rs/clap)
+- [clap](https://github.com/clap-rs/clap)
 - [fluent-rs](https://github.com/projectfluent/fluent-rs)
 - [rand](https://github.com/rust-random/rand)
 - [rust-embed](https://github.com/pyrossh/rust-embed)

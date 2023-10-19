@@ -6,7 +6,7 @@
 今後、AsciiDocかMarkdownのどちらかのフォーマットは削除予定です。<br>
 
 The content is the same for all formats and languages.<br>
- We plan to remove either AsciiDoc or Markdown format in the future.
+We plan to remove either AsciiDoc or Markdown format in the future.
 
 #### AsciiDoc
 - [READEME for English](README/AsciiDoc/README_eng.adoc)

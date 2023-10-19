@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 use clap::Parser;
-use fluent::{FluentBundle, FluentResource};
+use fluent::{FluentArgs, FluentBundle, FluentResource};
 use rust_embed::RustEmbed;
 use std::str::FromStr;
 use unic_langid::subtags::Language;
@@ -115,45 +115,39 @@ fn load_fluent_bundle(language: &str) -> Option<FluentBundle<FluentResource>> {
     Some(bundle)
 }
 
-pub fn get_translation(
-    bundle: &FluentBundle<FluentResource>,
+// この関数は、ライフタイム, bundle, FluentBundleの参照、キー(文字列)
+// およびオプショナルなFluentArgsの参照を受け取り、
+// 結果として String またはエラーメッセージを返します。
+pub fn get_translation<'bundle>(
+    bundle: &'bundle FluentBundle<FluentResource>,
     key: &str,
-    args: Option<&fluent::FluentArgs>,
+    args: Option<&FluentArgs<'bundle>>,
 ) -> Result<String, String> {
-    if let Some(message) = bundle.get_message(key) {
-        let temp_value = message.value();
-        let value = match &temp_value {
-            Some(v) => v,
-            None => {
-                return Err("翻訳が見つかりません。\
-                    \nTranslation not found."
-                    .to_string());
+    match bundle.get_message(key) {
+        Some(message) => {
+            let value = match message.value() {
+                Some(v) => v,
+                None => return Err("翻訳が見つかりません。\nTranslation not found.".to_string()),
+            };
+            let mut errors = Vec::with_capacity(1);
+            let result = bundle.format_pattern(value, args, &mut errors);
+            if !errors.is_empty() {
+                println!("Fluent errors\n{:?}", errors);
             }
-        };
-        let mut errors: Vec<fluent::FluentError> = vec![];
-        let result: std::borrow::Cow<'_, str> = bundle.format_pattern(value, args, &mut errors);
-        if !errors.is_empty() {
-            println!(
-                "Fluent errors\
-                \n{:?}",
-                errors
-            );
+            Ok(result.trim_matches('"').to_owned())
         }
-        Ok(result.trim_matches('"').to_string())
-    } else {
-        Err("翻訳が見つかりません。\
-        \nTranslation not found."
-            .to_string())
+        None => Err("翻訳が見つかりません。\nTranslation not found.".to_string()),
     }
 }
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, PartialEq)]
 #[clap(
     version = env!("CARGO_PKG_VERSION"),
-    author = "Neuron Grid",
+    author = env!("CARGO_PKG_AUTHORS"),
     about = "Rust Unique Pass: Generate strong password.",
     name = "Rust Unique Pass",
     bin_name = "rupass",
+
 )]
 
 pub struct RupassArgs {
@@ -168,36 +162,38 @@ pub struct RupassArgs {
             \nDefault language: English"
     )]
     language: Option<Language>,
-    /*
     // 大文字を含めるかどうかを尋ねる
     #[clap(
         short = 'u',
         long = "uppercase",
-        help = "Include uppercase letters in the password."
+        help = "Include uppercase letters in the password.\
+            \nBeta: This option is not yet implemented."
     )]
     uppercase: bool,
     // 小文字を含めるかどうかを尋ねる
     #[clap(
         short = 'c',
         long = "lowercase",
-        help = "Include lowercase letters in the password."
+        help = "Include lowercase letters in the password.\
+            \nBeta: This option is not yet implemented."
     )]
     lowercase: bool,
     // 数字を含めるかどうかを尋ねる
     #[clap(
         short = 'n',
         long = "numbers",
-        help = "Include numbers in the password."
+        help = "Include numbers in the password.\
+            \nBeta: This option is not yet implemented."
     )]
     numbers: bool,
     // 記号(特殊記号)を含めるかどうかを尋ねる
     #[clap(
         short = 's',
         long = "symbols",
-        help = "Include special symbols in passwords."
+        help = "Include special symbols in passwords.\
+            \nBeta: This option is not yet implemented."
     )]
     symbols: bool,
-    */
 }
 
 pub fn parse_args() -> RupassArgs {
