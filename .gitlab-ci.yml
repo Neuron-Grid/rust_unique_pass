@@ -28,7 +28,6 @@ before_script:
 stages:
   - test
   - build
-  - publish
 
 # このジョブは、最初に実行されるビルド・ステージで実行される。
 test-job:
@@ -46,13 +45,3 @@ build-job:
   script:
     - echo "Start execution of build-job"
     - cargo build --release
-
-publish-job:
-  stage: publish
-  script:
-    - echo "Start execution of publish-job"
-    - cargo login $CRATES_IO_TOKEN
-    - cargo publish
-  only:
-    - tags
-  when: manual
