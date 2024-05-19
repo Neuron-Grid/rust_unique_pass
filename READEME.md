@@ -1,17 +1,17 @@
 # Rust Unique Pass
 
-### Language
+### Japanese Description
+- 説明は基本的に日本語と英語で記載しています。
+- 日本語と英語で内容に差異が発生しないようにしていますが、内容が異なる場合があります。
+- 内容に差異がある場合日本語の記述を優先ます。
+- 内容に差異がある場合はissueなどでお知らせください。
 
-全てのフォーマットと言語で内容は同じです。<br>
-今後、AsciiDocかMarkdownのどちらかのフォーマットは削除予定です。<br>
+### English Description
+- The description is basically written in Japanese and English.
+- I try to ensure that there are no differences in content between Japanese and English, but there may be cases where the content differs.
+- If there is a difference in content, the Japanese description will take precedence.
+- If there is a difference in content, please let us know by submitting an issue.
 
-The content is the same for all formats and languages.<br>
-We plan to remove either AsciiDoc or Markdown format in the future.
-
-#### AsciiDoc
-- [READEME for English](README/AsciiDoc/README_eng.adoc)
-- [READEME for Japanese](README/AsciiDoc/README_jpn.adoc)
-
-#### Markdown
-- [READEME for English](README/Markdown/README_eng.md)
-- [READEME for Japanese](README/Markdown/README_jpn.md)
+#### READEME
+- [READEME for English](README/README_eng.md)
+- [READEME for Japanese](README/README_jpn.md)

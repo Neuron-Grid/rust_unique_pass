@@ -147,7 +147,6 @@ pub fn get_translation<'bundle>(
     about = "Rust Unique Pass: Generate strong password.",
     name = "Rust Unique Pass",
     bin_name = "rupass",
-
 )]
 
 pub struct RupassArgs {
@@ -161,39 +160,23 @@ pub struct RupassArgs {
             \nSupported languages: Japanese, English, and German.\
             \nDefault language: English"
     )]
-    language: Option<Language>,
-    // 大文字を含めるかどうかを尋ねる
-    #[clap(
-        short = 'u',
-        long = "uppercase",
-        help = "Include uppercase letters in the password.\
-            \nBeta: This option is not yet implemented."
-    )]
-    uppercase: bool,
-    // 小文字を含めるかどうかを尋ねる
-    #[clap(
-        short = 'c',
-        long = "lowercase",
-        help = "Include lowercase letters in the password.\
-            \nBeta: This option is not yet implemented."
-    )]
-    lowercase: bool,
-    // 数字を含めるかどうかを尋ねる
-    #[clap(
-        short = 'n',
-        long = "numbers",
-        help = "Include numbers in the password.\
-            \nBeta: This option is not yet implemented."
-    )]
-    numbers: bool,
-    // 記号(特殊記号)を含めるかどうかを尋ねる
+    pub language: Option<Language>,
+
+    // 特殊記号を含むかどうかのフラグ
     #[clap(
         short = 's',
         long = "symbols",
-        help = "Include special symbols in passwords.\
-            \nBeta: This option is not yet implemented."
+        help = "Include symbols in the password.\nBeta feature."
     )]
-    symbols: bool,
+    pub symbols: bool,
+
+    // 数字を含むかどうかのフラグ
+    #[clap(
+        short = 'n',
+        long = "numbers",
+        help = "Include numbers in the password.\nBeta feature."
+    )]
+    pub numbers: bool,
 }
 
 pub fn parse_args() -> RupassArgs {

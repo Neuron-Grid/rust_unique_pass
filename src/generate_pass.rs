@@ -13,6 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 use crate::i18n::get_translation;
+use crate::RupassArgs;
 use fluent::{FluentArgs, FluentBundle, FluentResource, FluentValue};
 use rand::{rngs::OsRng, seq::SliceRandom};
 use std::collections::HashMap;
@@ -72,8 +73,7 @@ pub fn get_password_length(bundle: &FluentBundle<FluentResource>) -> usize {
     }
 }
 
-// ユーザーの選択に基づいて文字セットを組み立てて返します。
-pub fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
+pub fn assemble_character_set(bundle: &FluentBundle<FluentResource>, args: &RupassArgs) -> String {
     // 各質問とそれに対応する文字セットをペアとして保持します。
     let questions: [(String, &str); 3] = [
         (
@@ -95,7 +95,7 @@ pub fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
             assembled_charset += chars;
         }
     }
-    let special_characters_set: String = handle_special_characters(bundle);
+    let special_characters_set: String = handle_special_characters(bundle, args);
     if !special_characters_set.is_empty() {
         assembled_charset += &special_characters_set;
     }
@@ -109,9 +109,12 @@ pub fn assemble_character_set(bundle: &FluentBundle<FluentResource>) -> String {
     assembled_charset
 }
 
-fn handle_special_characters(bundle: &FluentBundle<FluentResource>) -> String {
+fn handle_special_characters(bundle: &FluentBundle<FluentResource>, args: &RupassArgs) -> String {
     // デフォルトで使用される特殊文字のセットの定義
     let default_special_characters: &str = "!?@#$%^&*()";
+    if args.symbols {
+        return default_special_characters.to_string();
+    }
     // 選択に基づいて組み立てられる文字セットを一時的に格納する。
     let mut args_map: HashMap<&str, FluentValue> = HashMap::new();
     args_map.insert(

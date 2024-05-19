@@ -3,29 +3,26 @@
 利用者はパスワードの長さや使用する特殊文字などをカスタマイズすることができます。<br>
 翻訳用のFTLファイル以外は全てRust言語で書かれています。
 
+## インストール
+事前に`Rust`がインストールされていることを確認してください。<br>
+インストールされていない場合は、[Rustの公式サイト](https://www.rust-lang.org/)を参照してください。<br>
+インストール済みの場合は、下記のコマンドを実行してください。<br>
+``` zsh
+cargo install rust_unique_pass
+```
+
 ## 使い方
 下記の**実行方法**を参照してください。<br>
 CLIツールなのでコマンドラインから実行してください。<br>
 コマンド名は`rupass`です。
 
-### 強制終了する方法について
-- **macOSの場合** : `control` + `c`を押してください。
-- **Windowsの場合** : `Ctrl` + `c`を押してください。
-
 ### 注意事項
 - デフォルトの言語は英語です。
 - 言語は`-l`オプションで指定できます。
 
-## 実行方法
-事前に`Rust`がインストールされていることを確認してください。<br>
-インストールされていない場合は、[Rustの公式サイト](https://www.rust-lang.org/)を参照してください。
-
+コマンド例
 ``` zsh
-git clone https://github.com/Neuron-Grid/rust_unique_pass && \
-cd rust_unique_pass && \
-cargo build --release && \
-cd /target/release/ && \
-./rupass
+rupass -l jpn
 ```
 
 ## 言語について
@@ -34,11 +31,22 @@ cd /target/release/ && \
   - 英語
   - ドイツ語
 
+## 言語の指定方法
 ISO 639-3で定義されている言語コードを指定してください。<br>
 コマンドを下記のようにすることで日本語で利用できます。
 ```
-./rupass -l jpn
+rupass -l jpn
 ```
+
+### 注意事項
+- デフォルトの言語は英語です。
+- 言語は`-l`オプションで指定できます。
+  - 英語で使用する場合は`-l`オプションは不要です。
+  - 英語での使用例
+  ``` zsh
+  rupass
+  ```
+
 
 ## このソフトウェアは以下のクレートを利用しています
 GitHub repository
@@ -55,3 +63,7 @@ GitHub repository
 
 Copyright © 2023 Neuron Grid. <br>
 Licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+
+<!-- ## 協力のお願い
+このプロジェクトは、多言語対応を目指しています。<br>
+翻訳にご協力いただける方は、[CONTRIBUTING](../CONTRIBUTING.md)をご覧ください。 -->

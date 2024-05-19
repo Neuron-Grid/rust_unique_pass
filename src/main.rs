@@ -29,7 +29,8 @@ fn main() {
     // ユーザーの入力から希望のパスワードの長さを決定
     let length: usize = get_password_length(&bundle);
     // ユーザーの選択に基づいて文字セットを組み立て
-    let character_set: String = assemble_character_set(&bundle);
+    // let character_set: String = assemble_character_set(&bundle);
+    let character_set: String = assemble_character_set(&bundle, &matches);
     // 決定された設定を使用してセキュアなパスワードを生成
     let password: String = produce_secure_password(&character_set, length);
     // ユーザーに生成されたパスワードを表示
