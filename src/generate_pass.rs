@@ -18,31 +18,67 @@ use fluent::{FluentArgs, FluentBundle, FluentResource, FluentValue};
 use rand::{rngs::OsRng, seq::SliceRandom};
 use std::collections::HashMap;
 use std::io;
+use std::io::Write;
+use zxcvbn::zxcvbn;
 
-// ユーザーからの入力を取得し、トリムして返します。
-fn get_input(prompt: &str, bundle: &FluentBundle<FluentResource>) -> String {
+// ユーザーからの入力を取得し、トリムした結果を Result 型で返します。
+fn get_input(prompt: &str) -> Result<String, io::Error> {
     println!("{}", prompt);
-    let mut input: String = String::new();
-    io::stdin()
-        .read_line(&mut input)
-        .expect(&get_translation(bundle, "error_user_input", None).unwrap());
-    input.trim().to_string()
+    // プロンプトを確実に表示するためにバッファをフラッシュします。
+    io::stdout().flush()?;
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    Ok(input.trim().to_string())
 }
 
 // パスワードの長さに関するエラータイプを定義します。
-enum PasswordLengthError {
-    InvalidNumber,
+#[derive(Debug)]
+pub enum PasswordLengthError {
+    NonNumericInput,
+    NegativeNumber,
     TooShort,
+}
+
+pub enum TranslationError {
+    // NotFound(String),
+    // InputError(String),
+    GenerationError(String),
+    Other(String),
+}
+
+impl From<String> for TranslationError {
+    fn from(error: String) -> Self {
+        TranslationError::Other(error)
+    }
+}
+
+pub fn handle_password_generation(
+    chars: &str,
+    length: usize,
+    generated_password_msg: &str,
+    bundle: &FluentBundle<FluentResource>,
+) -> Result<(), TranslationError> {
+    match produce_secure_password(chars, length) {
+        Ok(password) => {
+            println!("{}\n{}\n", generated_password_msg, password);
+            Ok(())
+        }
+        Err(_) => {
+            let error_message = get_translation(bundle, "error_generation", None)
+                .map_err(|e| TranslationError::GenerationError(e))?;
+            println!("{}", error_message);
+            Err(TranslationError::GenerationError(error_message))
+        }
+    }
 }
 
 // パスワードの長さを検証する
 fn validate_password_length(input: &str) -> Result<usize, PasswordLengthError> {
-    // 文字列をisize型に変換して解析します。isize型を使用して負の数も考慮します。
     match input.parse::<isize>() {
-        Ok(n) if n <= 0 => Err(PasswordLengthError::InvalidNumber),
+        Ok(n) if n < 0 => Err(PasswordLengthError::NegativeNumber),
         Ok(n) if n as usize >= 8 => Ok(n as usize),
         Ok(_) => Err(PasswordLengthError::TooShort),
-        Err(_) => Err(PasswordLengthError::InvalidNumber),
+        Err(_) => Err(PasswordLengthError::NonNumericInput),
     }
 }
 
@@ -50,131 +86,176 @@ fn validate_password_length(input: &str) -> Result<usize, PasswordLengthError> {
 pub fn get_password_length(bundle: &FluentBundle<FluentResource>) -> usize {
     loop {
         // プロンプトとして表示するメッセージを取得
-        let prompt: String = get_translation(bundle, "question_password_length", None).unwrap();
-        // get_inputに正しいプロンプトを渡します
-        let input: String = get_input(&prompt, bundle);
-        match validate_password_length(&input) {
-            Ok(definitely) => return definitely,
-            Err(PasswordLengthError::InvalidNumber) => {
-                println!(
-                    "{}",
-                    get_translation(bundle, "error_invalid_number", None).unwrap()
-                );
+        let prompt_result = get_translation(bundle, "question_password_length", None);
+        let prompt = match prompt_result {
+            Ok(value) => value,
+            Err(e) => {
+                eprintln!("Error fetching translation: {}", e);
                 continue;
             }
-            Err(PasswordLengthError::TooShort) => {
-                println!(
-                    "{}",
-                    get_translation(bundle, "error_password_too_short", None).unwrap()
-                );
+        };
+
+        let input_result = get_input(&prompt);
+        let input = match input_result {
+            Ok(value) => value,
+            Err(_) => {
+                let error_msg = get_translation(bundle, "error_reading_input", None)
+                    .unwrap_or_else(|_| "Failed to read input.".to_string());
+                println!("{}", error_msg);
                 continue;
+            }
+        };
+
+        // 入力値を検証
+        match validate_password_length(&input) {
+            Ok(definitely) => return definitely,
+            Err(PasswordLengthError::NonNumericInput) => {
+                let error_msg = get_translation(bundle, "error_non_numeric_input", None)
+                    .unwrap_or_else(|_| "Input is not numeric.".to_string());
+                println!("{}", error_msg);
+            }
+            Err(PasswordLengthError::NegativeNumber) => {
+                let error_msg = get_translation(bundle, "error_negative_number", None)
+                    .unwrap_or_else(|_| "Number cannot be negative.".to_string());
+                println!("{}", error_msg);
+            }
+            Err(PasswordLengthError::TooShort) => {
+                let error_msg = get_translation(bundle, "error_password_too_short", None)
+                    .unwrap_or_else(|_| "Password is too short.".to_string());
+                println!("{}", error_msg);
             }
         }
     }
 }
 
-pub fn assemble_character_set(bundle: &FluentBundle<FluentResource>, args: &RupassArgs) -> String {
-    // 各質問とそれに対応する文字セットをペアとして保持します。
-    let questions: [(String, &str); 3] = [
+pub fn assemble_character_set(
+    bundle: &FluentBundle<FluentResource>,
+    args: &RupassArgs,
+) -> Result<String, String> {
+    let questions: [(Result<String, String>, &str); 3] = [
         (
-            get_translation(&bundle, "question_uppercase", None).unwrap(),
+            get_translation(bundle, "question_uppercase", None),
             "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
         ),
         (
-            get_translation(&bundle, "question_lowercase", None).unwrap(),
+            get_translation(bundle, "question_lowercase", None),
             "abcdefghijklmnopqrstuvwxyz",
         ),
         (
-            get_translation(&bundle, "question_numbers", None).unwrap(),
+            get_translation(bundle, "question_numbers", None),
             "0123456789",
         ),
     ];
-    let mut assembled_charset: String = String::new();
-    for (question, chars) in questions.iter() {
+    let mut assembled_charset = String::new();
+    for (question_result, chars) in questions.iter() {
+        let question = match question_result {
+            Ok(q) => q,
+            Err(e) => return Err(e.clone()),
+        };
         if ask_user(question, bundle) {
             assembled_charset += chars;
         }
     }
-    let special_characters_set: String = handle_special_characters(bundle, args);
+    let special_characters_set = handle_special_characters(bundle, args)?;
     if !special_characters_set.is_empty() {
         assembled_charset += &special_characters_set;
     }
     if assembled_charset.is_empty() {
-        println!(
-            "{}",
-            get_translation(bundle, "error_no_charset_selected", None).unwrap()
-        );
-        std::process::exit(1);
+        let error_message = get_translation(bundle, "error_no_charset_selected", None)
+            .unwrap_or_else(|_| "No character set selected.".to_string());
+        return Err(error_message);
     }
-    assembled_charset
+    Ok(assembled_charset)
 }
 
-fn handle_special_characters(bundle: &FluentBundle<FluentResource>, args: &RupassArgs) -> String {
-    // デフォルトで使用される特殊文字のセットの定義
+fn handle_special_characters(
+    bundle: &FluentBundle<FluentResource>,
+    args: &RupassArgs,
+) -> Result<String, String> {
     let default_special_characters: &str = "!?@#$%^&*()";
     if args.symbols {
-        return default_special_characters.to_string();
+        return Ok(default_special_characters.to_string());
     }
-    // 選択に基づいて組み立てられる文字セットを一時的に格納する。
     let mut args_map: HashMap<&str, FluentValue> = HashMap::new();
     args_map.insert(
         "specialChars",
         FluentValue::from(default_special_characters),
     );
-    // FluentArgs の作成
     let args: FluentArgs = args_map.iter().map(|(k, v)| (*k, v.clone())).collect();
-    println!(
-        "{}",
-        &get_translation(bundle, "default_special_chars_message", Some(&args)).unwrap(),
-    );
-    if ask_user(
-        &get_translation(bundle, "question_special_chars", None).unwrap(),
-        bundle,
-    ) {
+    let default_message = get_translation(bundle, "default_special_chars_message", Some(&args))?;
+    println!("{}", default_message);
+    let question = get_translation(bundle, "question_special_chars", None)?;
+    if ask_user(&question, bundle) {
         loop {
-            if ask_user(
-                &get_translation(bundle, "question_change_special_chars", None).unwrap(),
-                bundle,
-            ) {
-                let special_chars_input: String = get_input(
-                    &get_translation(bundle, "question_enter_special_chars", None).unwrap(),
+            let change_question = get_translation(bundle, "question_change_special_chars", None)?;
+            if ask_user(&change_question, bundle) {
+                match get_input(&get_translation(
                     bundle,
-                );
-                return special_chars_input;
+                    "question_enter_special_chars",
+                    None,
+                )?) {
+                    Ok(special_chars_input) => return Ok(special_chars_input),
+                    Err(_) => {
+                        let error_input_message =
+                            get_translation(bundle, "error_reading_input", None)
+                                .unwrap_or_else(|_| "Error reading input.".to_string());
+                        println!("{}", error_input_message);
+                        continue;
+                    }
+                }
             } else {
-                return default_special_characters.to_string();
+                return Ok(default_special_characters.to_string());
             }
         }
     }
-    "".to_string()
+    Ok("".to_string())
+}
+
+fn validate_input(input: &str) -> Option<bool> {
+    match input.to_lowercase().as_str() {
+        // english
+        "y" | "yes" => Some(true),
+        "n" | "no" => Some(false),
+        // japanese
+        "はい" => Some(true),
+        "いいえ" => Some(false),
+        // german
+        "ja" => Some(true),
+        "nein" => Some(false),
+        _ => None,
+    }
 }
 
 // ユーザーに質問する
 fn ask_user(message: &str, bundle: &FluentBundle<FluentResource>) -> bool {
     loop {
-        let input: String = get_input(message, bundle);
-        match input.to_lowercase().as_str() {
-            // english
-            "y" => return true,
-            "n" => return false,
-            "yes" => return true,
-            "no" => return false,
-            // japanese
-            "はい" => return true,
-            "いいえ" => return false,
-            // german
-            "ja" => return true,
-            "nein" => return false,
-            _ => println!(
-                "{}",
-                get_translation(bundle, "error_invalid_input", None).unwrap(),
-            ),
+        match get_input(message) {
+            Ok(input) => {
+                if let Some(result) = validate_input(&input) {
+                    return result;
+                } else {
+                    let error_message = get_translation(bundle, "error_invalid_input", None)
+                        .unwrap_or_else(|_| {
+                            "Invalid input provided. Please try again.".to_string()
+                        });
+                    println!("{}", error_message);
+                }
+            }
+            Err(_) => {
+                let error_message = get_translation(bundle, "error_reading_input", None)
+                    .unwrap_or_else(|_| "Error reading input. Please try again.".to_string());
+                println!("{}", error_message);
+            }
         }
     }
 }
 
 // 指定された文字セットと長さに基づいて、強力なパスワードを生成します
-pub fn produce_secure_password(chars: &str, length: usize) -> String {
+pub fn produce_secure_password(chars: &str, length: usize) -> Result<String, PasswordLengthError> {
+    if length < 8 {
+        return Err(PasswordLengthError::TooShort);
+    }
+
     let mut password: String;
     loop {
         password = assemble_random_password(chars, length);
@@ -182,7 +263,7 @@ pub fn produce_secure_password(chars: &str, length: usize) -> String {
             break;
         }
     }
-    password
+    Ok(password)
 }
 
 // 指定された文字セットと長さに基づいてランダムなパスワードを組み立てます。
@@ -198,6 +279,8 @@ fn assemble_random_password(chars: &str, length: usize) -> String {
 
 // zxcvbnライブラリを使用して、パスワードの強度を評価します。
 fn is_strong(password: &str) -> bool {
-    let result: zxcvbn::Entropy = zxcvbn::zxcvbn(password, &[]).unwrap();
-    result.score() > 3
+    match zxcvbn(password, &[]) {
+        Ok(result) => result.score() > 3,
+        Err(_) => false,
+    }
 }

@@ -32,7 +32,7 @@ rupass -l jpn
   - ドイツ語
 
 ## 言語の指定方法
-ISO 639-3で定義されている言語コードを指定してください。<br>
+`ISO 639-3`で定義されている言語コードを指定してください。<br>
 コマンドを下記のようにすることで日本語で利用できます。
 ```
 rupass -l jpn
@@ -57,13 +57,13 @@ GitHub repository
 - [unic-locale](https://github.com/zbraniecki/unic-locale)<br>
 - [zxcvbn-rs](https://github.com/shssoichiro/zxcvbn-rs)<br>
 
+## 協力のお願い
+このプロジェクトは、多言語対応を目指しています。
+翻訳にご協力いただける方は、[CONTRIBUTING](../CONTRIBUTING.md)をご覧ください。
+
 ## License
 このソフトウェアは`Apache License 2.0`の下で公開されています。<br>
 詳細は[LICENSE](../LICENSE)をご覧ください。
 
 Copyright © 2023 Neuron Grid. <br>
 Licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).
-
-<!-- ## 協力のお願い
-このプロジェクトは、多言語対応を目指しています。<br>
-翻訳にご協力いただける方は、[CONTRIBUTING](../CONTRIBUTING.md)をご覧ください。 -->

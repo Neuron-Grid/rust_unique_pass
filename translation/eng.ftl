@@ -11,6 +11,7 @@ error_user_input = "Failed to read line of user."
 error_parse = "Failed to parse."
 read_error = "Read error"
 error_bundle_load = "Could not load translation package."
+error_generation = "Error generating password."
 
 # Questions and prompts
 error_no_charset_selected  = "Error: No valid character set selected.

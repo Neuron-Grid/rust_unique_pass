@@ -1,9 +1,12 @@
-image: "rust:latest"
-
-before_script:
-  - rustup update stable
-  - rustc --version
-  - cargo --version
+default:
+  image: "rust:latest"
+  cache: false
+  before_script:
+    - echo "Start execution of before_script"
+    - rustup self update
+    - rustup update stable
+    - rustc --version
+    - cargo --version
 
 stages:
   - test
@@ -18,6 +21,7 @@ test-job:
     - echo "Start execution of test-job"
     - cargo check
     - cargo test
+  allow_failure: false
 
 build-job:
   stage: build
@@ -27,5 +31,7 @@ build-job:
     - cargo publish --token $CARGO_REGISTRY_TOKEN
   needs:
     - test-job
-  only:
-    - main
+    artifacts: true
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: always

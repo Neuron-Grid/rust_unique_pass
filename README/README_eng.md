@@ -1,3 +1,5 @@
+Language: [English](./README_eng.md) | [日本語](./README_jpn.md)
+
 ## Rust Unique Pass
 This software is designed to generate random strong passwords.<br>
 Users can customize the length of their passwords and the special characters they use.<br>
@@ -22,7 +24,7 @@ The command name is `rupass`.
   - English language
   - German language
 
-For use in languages other than English, specify the language code defined in ISO 639-3.<br>
+For use in languages other than English, specify the language code defined in `ISO 639-3`.<br>
 The command can be used in Japanese by making the following changes.
 ```
 rupass -l jpn
@@ -45,6 +47,9 @@ GitHub repository
 - [unic-locale](https://github.com/zbraniecki/unic-locale)
 - [zxcvbn-rs](https://github.com/shssoichiro/zxcvbn-rs)
 
+## Request for collaboration.
+This project is intended to be multilingual.
+If you would like to help with translation, please see [CONTRIBUTING](../CONTRIBUTING/English.md).
 
 ## License
 This software is released under the `Apache License 2.0`.<br>

@@ -27,7 +27,7 @@ const DEFAULT_LANGUAGE: &str = "eng";
 #[include = "*.ftl"]
 struct Translations;
 
-fn get_embedded_resource(filename: &str) -> Option<String> {
+pub fn get_embedded_resource(filename: &str) -> Option<String> {
     Translations::get(filename)
         .and_then(|data: rust_embed::EmbeddedFile| String::from_utf8(data.data.to_vec()).ok())
 }
@@ -35,14 +35,8 @@ fn get_embedded_resource(filename: &str) -> Option<String> {
 fn map_to_fluent_code(code: &str) -> LanguageIdentifier {
     match LanguageIdentifier::from_str(code) {
         Ok(lang_id) => lang_id,
-        Err(error) => {
-            // デフォルトのエラーメッセージを表示する
-            eprintln!(
-                "指定された言語識別子の解析に失敗しました。\
-                \nFailed to parse the provided language identifier.\
-                \n{:?}",
-                error
-            );
+        Err(_) => {
+            eprintln!("Failed to parse the provided language identifier");
             std::process::exit(1);
         }
     }
@@ -54,16 +48,10 @@ pub fn initialize_bundle(args: &RupassArgs) -> FluentBundle<FluentResource> {
         Some(lang) => lang.as_str(),
         None => DEFAULT_LANGUAGE,
     };
-    // 言語バンドルをロード
     match load_fluent_bundle(language) {
         Some(bundle) => bundle,
         None => {
-            // 翻訳バンドルのロードに失敗しました。
-            // Failed to load translation bundle.
-            eprintln!(
-                "対応言語を確認した上で再度実行して下さい。\
-                \nPlease check the supported languages and execute again."
-            );
+            eprintln!("Failed to parse the provided language identifier");
             std::process::exit(1);
         }
     }
@@ -71,53 +59,36 @@ pub fn initialize_bundle(args: &RupassArgs) -> FluentBundle<FluentResource> {
 
 // 指定された言語のFTLファイルを読み込み、Fluentバンドルを返します。
 fn load_fluent_bundle(language: &str) -> Option<FluentBundle<FluentResource>> {
-    let fluent_code: LanguageIdentifier = map_to_fluent_code(language);
-    let ftl_filename: String = format!("{}.ftl", fluent_code);
-    // 埋め込まれたリソースを取得
-    let ftl_string: String = match get_embedded_resource(&ftl_filename) {
+    let fluent_code = map_to_fluent_code(language);
+    let ftl_filename = format!("{}.ftl", fluent_code);
+    let ftl_string = match get_embedded_resource(&ftl_filename) {
         Some(content) => content,
         None => {
-            eprintln!(
-                "エラー: 埋め込まれたリソースが存在しません。\
-                \nerror: Embedded resource does not exist.\
-                \n{}",
-                ftl_filename
-            );
+            eprintln!("The selected language is not supported.");
             std::process::exit(1);
         }
     };
-    let ftl_resource: FluentResource = match FluentResource::try_new(ftl_string) {
+
+    let ftl_resource = match FluentResource::try_new(ftl_string) {
         Ok(resource) => resource,
-        Err(error) => {
-            eprintln!(
-                "FTL文字列をパースできませんでした。\
-                \nFTL string could not be parsed.\
-                \n{:?}",
-                error
-            );
+        Err(_) => {
+            eprintln!("FTL string could not be parsed.");
             std::process::exit(1);
         }
     };
-    let langid: LanguageIdentifier = fluent_code;
+
+    let langid = fluent_code;
     let mut bundle = FluentBundle::new(vec![langid]);
     match bundle.add_resource(ftl_resource) {
         Ok(_) => (),
-        Err(error) => {
-            eprintln!(
-                "FTLリソースの追加に失敗しました。\
-                \nFailed to add FTL resource.\
-                \n{:?}",
-                error
-            );
+        Err(_) => {
+            eprintln!("Failed to add FTL resource.");
             std::process::exit(1);
         }
     };
     Some(bundle)
 }
 
-// この関数は、ライフタイム, bundle, FluentBundleの参照、キー(文字列)
-// およびオプショナルなFluentArgsの参照を受け取り、
-// 結果として String またはエラーメッセージを返します。
 pub fn get_translation<'bundle>(
     bundle: &'bundle FluentBundle<FluentResource>,
     key: &str,
@@ -127,16 +98,12 @@ pub fn get_translation<'bundle>(
         Some(message) => {
             let value = match message.value() {
                 Some(v) => v,
-                None => return Err("翻訳が見つかりません。\nTranslation not found.".to_string()),
+                None => return Err("The embedded resource does not exist.".to_string()),
             };
-            let mut errors = Vec::with_capacity(1);
-            let result = bundle.format_pattern(value, args, &mut errors);
-            if !errors.is_empty() {
-                println!("Fluent errors\n{:?}", errors);
-            }
+            let result = bundle.format_pattern(value, args, &mut Vec::with_capacity(1));
             Ok(result.trim_matches('"').to_owned())
         }
-        None => Err("翻訳が見つかりません。\nTranslation not found.".to_string()),
+        None => Err("The embedded resource does not exist.".to_string()),
     }
 }
 
@@ -144,7 +111,7 @@ pub fn get_translation<'bundle>(
 #[clap(
     version = env!("CARGO_PKG_VERSION"),
     author = env!("CARGO_PKG_AUTHORS"),
-    about = "Rust Unique Pass: Generate strong password.",
+    about = "A CLI tool for generating strong password.",
     name = "Rust Unique Pass",
     bin_name = "rupass",
 )]
@@ -156,7 +123,7 @@ pub struct RupassArgs {
         long = "language",
         value_name = "LANGUAGE",
         help = "Specifies the language for user prompts and messages.\
-            \nSpecify the language code as defined by Iso639-3.\
+            \nSpecify the language code as defined by ISO639-3.\
             \nSupported languages: Japanese, English, and German.\
             \nDefault language: English"
     )]
@@ -166,7 +133,8 @@ pub struct RupassArgs {
     #[clap(
         short = 's',
         long = "symbols",
-        help = "Include symbols in the password.\nBeta feature."
+        help = "Include symbols in the password.\
+        \nBeta feature."
     )]
     pub symbols: bool,
 
@@ -174,9 +142,28 @@ pub struct RupassArgs {
     #[clap(
         short = 'n',
         long = "numbers",
-        help = "Include numbers in the password.\nBeta feature."
+        help = "Include numbers in the password.\
+        \nBeta feature."
     )]
     pub numbers: bool,
+
+    // 大文字を含むかどうかのフラグ
+    #[clap(
+        short = 'u',
+        long = "uppercase",
+        help = "Include uppercase letters in the password.\
+        \nBeta feature."
+    )]
+    pub uppercase: bool,
+
+    // 小文字を含むかどうかのフラグ
+    #[clap(
+        short = 'w',
+        long = "lowercase",
+        help = "Include lowercase letters in the password.\
+        \nBeta feature."
+    )]
+    pub lowercase: bool,
 }
 
 pub fn parse_args() -> RupassArgs {

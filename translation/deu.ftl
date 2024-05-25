@@ -11,6 +11,7 @@ error_user_input = "Zeile des Benutzers konnte nicht gelesen werden."
 error_parse = "Parsen fehlgeschlagen."
 read_error = "Konnte nicht geladen werden."
 error_bundle_load = "Übersetzungsbündel konnte nicht geladen werden."
+error_generation = "Fehler bei der Generierung des Passworts."
 
 # Questions and prompts
 error_no_charset_selected  = "Fehler: Es wurde kein gültiger Zeichensatz ausgewählt.
