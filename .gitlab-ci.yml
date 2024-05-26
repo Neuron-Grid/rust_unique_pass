@@ -1,6 +1,5 @@
 default:
   image: "rust:latest"
-
   before_script:
     - echo "Start execution of before_script"
     - rustup self update
@@ -12,9 +11,6 @@ stages:
   - test
   - build
 
-variables:
-  CARGO_REGISTRY_TOKEN: $CARTIS_API_KEY
-
 test-job:
   stage: test
   script:
@@ -25,13 +21,14 @@ test-job:
 
 build-job:
   stage: build
+  variables:
+    CARGO_REGISTRY_TOKEN: $CARTIS_API_KEY
+  needs:
+    - test-job
   script:
     - echo "Start execution of build-job"
     - cargo build --release
     - cargo publish --token $CARGO_REGISTRY_TOKEN
-  needs:
-    - test-job
-
   rules:
     - if: '$CI_COMMIT_BRANCH == "main"'
       when: always
