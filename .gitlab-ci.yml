@@ -9,7 +9,7 @@ default:
 
 stages:
   - test
-  - build
+  - deploy
 
 test-job:
   stage: test
@@ -17,16 +17,17 @@ test-job:
     - echo "Start execution of test-job"
     - cargo check
     - cargo test
+    - cargo publish --dry-run
   allow_failure: false
 
-build-job:
-  stage: build
+deploy-job:
+  stage: deploy
   variables:
     CARGO_REGISTRY_TOKEN: $CARTIS_API_KEY
   needs:
     - test-job
   script:
-    - echo "Start execution of build-job"
+    - echo "Start execution of deploy-job"
     - cargo build --release
     - cargo publish --token $CARGO_REGISTRY_TOKEN
   rules:
