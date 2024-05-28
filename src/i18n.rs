@@ -115,7 +115,6 @@ pub fn get_translation<'bundle>(
     name = "Rust Unique Pass",
     bin_name = "rupass",
 )]
-
 pub struct RupassArgs {
     // 設定言語を指定する
     #[clap(
@@ -134,7 +133,7 @@ pub struct RupassArgs {
         short = 's',
         long = "symbols",
         help = "Include symbols in the password.\
-        \nBeta feature."
+        \nRelease Candidate Version."
     )]
     pub symbols: bool,
 
@@ -143,7 +142,7 @@ pub struct RupassArgs {
         short = 'n',
         long = "numbers",
         help = "Include numbers in the password.\
-        \nBeta feature."
+        \nRelease Candidate Version."
     )]
     pub numbers: bool,
 
@@ -152,7 +151,7 @@ pub struct RupassArgs {
         short = 'u',
         long = "uppercase",
         help = "Include uppercase letters in the password.\
-        \nBeta feature."
+        \nRelease Candidate Version."
     )]
     pub uppercase: bool,
 
@@ -161,9 +160,20 @@ pub struct RupassArgs {
         short = 'w',
         long = "lowercase",
         help = "Include lowercase letters in the password.\
-        \nBeta feature."
+        \nRelease Candidate Version."
     )]
     pub lowercase: bool,
+
+    // パスワードの長さを指定する
+    #[clap(
+        short = 'c',
+        long = "count",
+        value_name = "PASSWORD_LENGTH",
+        help = "Specifies the length of the password.\
+        \nThis option allows you to set the number of characters in the generated password.\
+        \nRelease Candidate Version."
+    )]
+    pub password_length: Option<usize>,
 }
 
 pub fn parse_args() -> RupassArgs {

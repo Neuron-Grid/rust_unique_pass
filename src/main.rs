@@ -15,7 +15,7 @@ limitations under the License. */
 mod generate_pass;
 mod i18n;
 use generate_pass::{assemble_character_set, get_password_length, handle_password_generation};
-use i18n::{get_translation, initialize_bundle, parse_args, RupassArgs};
+use i18n::{get_translation, initialize_bundle, parse_args};
 
 fn main() {
     // ユーザーの引数を解析して希望の言語を決定
@@ -48,7 +48,7 @@ fn handle_error<T>(result: Result<T, String>, error_message: &str) -> Option<T> 
     match result {
         Ok(value) => Some(value),
         Err(e) => {
-            eprintln!("{}: {}", error_message, e);
+            eprintln!("{}\n{}", error_message, e);
             None
         }
     }

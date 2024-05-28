@@ -11,6 +11,9 @@ stages:
   - test
   - deploy
 
+variables:
+  CARGO_REGISTRY_TOKEN: $CARTIS_API_KEY
+
 test-job:
   stage: test
   script:
@@ -22,8 +25,6 @@ test-job:
 
 deploy-job:
   stage: deploy
-  variables:
-    CARGO_REGISTRY_TOKEN: $CARTIS_API_KEY
   needs:
     - test-job
   script:

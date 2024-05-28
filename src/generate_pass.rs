@@ -13,7 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 use crate::i18n::get_translation;
-use crate::RupassArgs;
+use crate::i18n::RupassArgs;
 use fluent::{FluentArgs, FluentBundle, FluentResource, FluentValue};
 use rand::{rngs::OsRng, seq::SliceRandom};
 use std::collections::HashMap;
@@ -132,22 +132,40 @@ pub fn assemble_character_set(
     bundle: &FluentBundle<FluentResource>,
     args: &RupassArgs,
 ) -> Result<String, String> {
-    let questions: [(Result<String, String>, &str); 3] = [
+    let mut assembled_charset = String::new();
+
+    if args.numbers {
+        assembled_charset += "0123456789";
+    }
+    if args.uppercase {
+        assembled_charset += "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    }
+    if args.lowercase {
+        assembled_charset += "abcdefghijklmnopqrstuvwxyz";
+    }
+
+    let questions: [(Result<String, String>, &str, bool); 3] = [
         (
             get_translation(bundle, "question_uppercase", None),
             "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+            args.uppercase,
         ),
         (
             get_translation(bundle, "question_lowercase", None),
             "abcdefghijklmnopqrstuvwxyz",
+            args.lowercase,
         ),
         (
             get_translation(bundle, "question_numbers", None),
             "0123456789",
+            args.numbers,
         ),
     ];
-    let mut assembled_charset = String::new();
-    for (question_result, chars) in questions.iter() {
+
+    for (question_result, chars, flag) in questions.iter() {
+        if *flag {
+            continue;
+        }
         let question = match question_result {
             Ok(q) => q,
             Err(e) => return Err(e.clone()),
@@ -156,15 +174,18 @@ pub fn assemble_character_set(
             assembled_charset += chars;
         }
     }
+
     let special_characters_set = handle_special_characters(bundle, args)?;
     if !special_characters_set.is_empty() {
         assembled_charset += &special_characters_set;
     }
+
     if assembled_charset.is_empty() {
         let error_message = get_translation(bundle, "error_no_charset_selected", None)
             .unwrap_or_else(|_| "No character set selected.".to_string());
         return Err(error_message);
     }
+
     Ok(assembled_charset)
 }
 
