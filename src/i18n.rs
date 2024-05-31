@@ -132,8 +132,7 @@ pub struct RupassArgs {
     #[clap(
         short = 's',
         long = "symbols",
-        help = "Include symbols in the password.\
-        \nRelease Candidate Version."
+        help = "Include symbols in the password."
     )]
     pub symbols: bool,
 
@@ -142,7 +141,7 @@ pub struct RupassArgs {
         short = 'n',
         long = "numbers",
         help = "Include numbers in the password.\
-        \nRelease Candidate Version."
+        \nAs a default setting, !@#$%^&*() is used."
     )]
     pub numbers: bool,
 
@@ -150,8 +149,7 @@ pub struct RupassArgs {
     #[clap(
         short = 'u',
         long = "uppercase",
-        help = "Include uppercase letters in the password.\
-        \nRelease Candidate Version."
+        help = "Include uppercase letters in the password."
     )]
     pub uppercase: bool,
 
@@ -159,8 +157,7 @@ pub struct RupassArgs {
     #[clap(
         short = 'w',
         long = "lowercase",
-        help = "Include lowercase letters in the password.\
-        \nRelease Candidate Version."
+        help = "Include lowercase letters in the password."
     )]
     pub lowercase: bool,
 
@@ -170,8 +167,7 @@ pub struct RupassArgs {
         long = "count",
         value_name = "PASSWORD_LENGTH",
         help = "Specifies the length of the password.\
-        \nThis option allows you to set the number of characters in the generated password.\
-        \nRelease Candidate Version."
+        \nThis option allows you to set the number of characters in the generated password."
     )]
     pub password_length: Option<usize>,
 }
