@@ -12,14 +12,14 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
-use crate::i18n::get_translation;
-use crate::i18n::RupassArgs;
+use crate::i18n::{get_translation, RupassArgs};
 use fluent::{FluentArgs, FluentBundle, FluentResource, FluentValue};
-use rand::{rngs::OsRng, seq::SliceRandom};
-use std::collections::HashMap;
-use std::io;
-use std::io::Write;
-use zxcvbn::zxcvbn;
+use rand::{prelude::SliceRandom, rngs::OsRng};
+use std::{
+    collections::HashMap,
+    io::{self, Write},
+};
+use zxcvbn::{zxcvbn, Score};
 
 // ユーザーからの入力を取得し、トリムした結果を Result 型で返します。
 fn get_input(prompt: &str) -> Result<String, io::Error> {
@@ -40,8 +40,6 @@ pub enum PasswordLengthError {
 }
 
 pub enum TranslationError {
-    // NotFound(String),
-    // InputError(String),
     GenerationError(String),
     Other(String),
 }
@@ -300,8 +298,10 @@ fn assemble_random_password(chars: &str, length: usize) -> String {
 
 // zxcvbnライブラリを使用して、パスワードの強度を評価します。
 fn is_strong(password: &str) -> bool {
-    match zxcvbn(password, &[]) {
-        Ok(result) => result.score() > 3,
-        Err(_) => false,
+    let result = zxcvbn(password, &[]);
+    match result.score() {
+        Score::Zero | Score::One | Score::Two | Score::Three => false,
+        Score::Four => true,
+        _ => todo!(),
     }
 }

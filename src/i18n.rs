@@ -16,8 +16,7 @@ use clap::Parser;
 use fluent::{FluentArgs, FluentBundle, FluentResource};
 use rust_embed::RustEmbed;
 use std::str::FromStr;
-use unic_langid::subtags::Language;
-use unic_langid::LanguageIdentifier;
+use unic_langid::{subtags::Language, LanguageIdentifier};
 
 // デフォルト言語を定義
 const DEFAULT_LANGUAGE: &str = "eng";
@@ -111,9 +110,9 @@ pub fn get_translation<'bundle>(
 #[clap(
     version = env!("CARGO_PKG_VERSION"),
     author = env!("CARGO_PKG_AUTHORS"),
-    about = "A CLI tool for generating strong password.",
+    about = env!("CARGO_PKG_DESCRIPTION"),
     name = "Rust Unique Pass",
-    bin_name = "rupass",
+    bin_name = env!("CARGO_BIN_NAME"),
 )]
 pub struct RupassArgs {
     // 設定言語を指定する
@@ -132,16 +131,25 @@ pub struct RupassArgs {
     #[clap(
         short = 's',
         long = "symbols",
-        help = "Include symbols in the password."
+        help = "Include symbols in the password.\
+        \nAs a default setting, !@#$%^&*() is used."
     )]
     pub symbols: bool,
+
+    // パスワードの長さを指定する
+    #[clap(
+        short = 'c',
+        long = "count",
+        value_name = "PASSWORD_LENGTH",
+        help = "Specifies the length of the password."
+    )]
+    pub password_length: Option<usize>,
 
     // 数字を含むかどうかのフラグ
     #[clap(
         short = 'n',
         long = "numbers",
-        help = "Include numbers in the password.\
-        \nAs a default setting, !@#$%^&*() is used."
+        help = "Include numbers in the password."
     )]
     pub numbers: bool,
 
@@ -160,16 +168,6 @@ pub struct RupassArgs {
         help = "Include lowercase letters in the password."
     )]
     pub lowercase: bool,
-
-    // パスワードの長さを指定する
-    #[clap(
-        short = 'c',
-        long = "count",
-        value_name = "PASSWORD_LENGTH",
-        help = "Specifies the length of the password.\
-        \nThis option allows you to set the number of characters in the generated password."
-    )]
-    pub password_length: Option<usize>,
 }
 
 pub fn parse_args() -> RupassArgs {

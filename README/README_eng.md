@@ -38,6 +38,7 @@ rupass -l jpn
   ``` zsh
   rupass
   ```
+
 ## This software utilizes the following crates
 GitHub repository
 - [clap](https://github.com/clap-rs/clap)
