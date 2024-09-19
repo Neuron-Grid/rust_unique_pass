@@ -1,4 +1,4 @@
-/* Copyright 2023 Neuron Grid
+/* Copyright 2023-2024 Neuron Grid
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@ limitations under the License. */
 use clap::Parser;
 use fluent::{FluentArgs, FluentBundle, FluentResource};
 use rust_embed::RustEmbed;
-use std::str::FromStr;
+use std::{env, str::FromStr};
 use unic_langid::{subtags::Language, LanguageIdentifier};
 
 // デフォルト言語を定義
@@ -112,7 +112,7 @@ pub fn get_translation<'bundle>(
     author = env!("CARGO_PKG_AUTHORS"),
     about = env!("CARGO_PKG_DESCRIPTION"),
     name = "Rust Unique Pass",
-    bin_name = env!("CARGO_BIN_NAME"),
+    bin_name = env!("CARGO_PKG_NAME")
 )]
 pub struct RupassArgs {
     // 設定言語を指定する

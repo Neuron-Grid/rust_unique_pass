@@ -1,4 +1,4 @@
-/* Copyright 2023 Neuron Grid
+/* Copyright 2023-2024 Neuron Grid
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -32,22 +32,15 @@ fn get_input(prompt: &str) -> Result<String, io::Error> {
 }
 
 // パスワードの長さに関するエラータイプを定義します。
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum PasswordLengthError {
     NonNumericInput,
     NegativeNumber,
     TooShort,
+    GenerationFailed,
 }
-
 pub enum TranslationError {
-    GenerationError(String),
-    Other(String),
-}
-
-impl From<String> for TranslationError {
-    fn from(error: String) -> Self {
-        TranslationError::Other(error)
-    }
+    GenerationError,
 }
 
 pub fn handle_password_generation(
@@ -63,15 +56,15 @@ pub fn handle_password_generation(
         }
         Err(_) => {
             let error_message = get_translation(bundle, "error_generation", None)
-                .map_err(|e| TranslationError::GenerationError(e))?;
+                .map_err(|_| TranslationError::GenerationError)?;
             println!("{}", error_message);
-            Err(TranslationError::GenerationError(error_message))
+            Err(TranslationError::GenerationError)
         }
     }
 }
 
 // パスワードの長さを検証する
-fn validate_password_length(input: &str) -> Result<usize, PasswordLengthError> {
+pub fn validate_password_length(input: &str) -> Result<usize, PasswordLengthError> {
     match input.parse::<isize>() {
         Ok(n) if n < 0 => Err(PasswordLengthError::NegativeNumber),
         Ok(n) if n as usize >= 8 => Ok(n as usize),
@@ -120,6 +113,11 @@ pub fn get_password_length(bundle: &FluentBundle<FluentResource>) -> usize {
             Err(PasswordLengthError::TooShort) => {
                 let error_msg = get_translation(bundle, "error_password_too_short", None)
                     .unwrap_or_else(|_| "Password is too short.".to_string());
+                println!("{}", error_msg);
+            }
+            Err(PasswordLengthError::GenerationFailed) => {
+                let error_msg = get_translation(bundle, "error_generation_failed", None)
+                    .unwrap_or_else(|_| "Password generation failed.".to_string());
                 println!("{}", error_msg);
             }
         }
@@ -231,16 +229,11 @@ fn handle_special_characters(
 }
 
 fn validate_input(input: &str) -> Option<bool> {
-    match input.to_lowercase().as_str() {
-        // english
-        "y" | "yes" => Some(true),
-        "n" | "no" => Some(false),
-        // japanese
-        "はい" => Some(true),
-        "いいえ" => Some(false),
-        // german
-        "ja" => Some(true),
-        "nein" => Some(false),
+    let lower_input = input.to_lowercase();
+    // 対応言語: 英語、日本語、ドイツ語
+    match lower_input.as_str() {
+        "y" | "yes" | "はい" | "ja" => Some(true),
+        "n" | "no" | "いいえ" | "nein" => Some(false),
         _ => None,
     }
 }
@@ -271,33 +264,43 @@ fn ask_user(message: &str, bundle: &FluentBundle<FluentResource>) -> bool {
 
 // 指定された文字セットと長さに基づいて、強力なパスワードを生成します
 pub fn produce_secure_password(chars: &str, length: usize) -> Result<String, PasswordLengthError> {
-    if length < 8 {
+    if length < 15 {
         return Err(PasswordLengthError::TooShort);
     }
 
     let mut password: String;
     loop {
-        password = assemble_random_password(chars, length);
-        if is_strong(&password) {
-            break;
+        match assemble_random_password(chars, length) {
+            Ok(pass) => {
+                password = pass;
+                if is_strong(&password) {
+                    break;
+                }
+            }
+            Err(_) => return Err(PasswordLengthError::GenerationFailed),
         }
     }
     Ok(password)
 }
 
 // 指定された文字セットと長さに基づいてランダムなパスワードを組み立てます。
-fn assemble_random_password(chars: &str, length: usize) -> String {
+pub fn assemble_random_password(chars: &str, length: usize) -> Result<String, &'static str> {
     // セキュアな乱数生成のための乱数生成器を初期化します。
     let mut rng: OsRng = OsRng;
     // 文字列をcharのベクタに変換します。
     let chars_vec: Vec<char> = chars.chars().collect();
-    (0..length)
-        .map(|_| *chars_vec.choose(&mut rng).unwrap())
-        .collect()
+    let password: String = (0..length)
+        .map(|_| {
+            chars_vec.choose(&mut rng)
+                .ok_or("Failed to choose a random character")
+                .map(|&c| c)
+        })
+        .collect::<Result<String, _>>()?;
+    Ok(password)
 }
 
 // zxcvbnライブラリを使用して、パスワードの強度を評価します。
-fn is_strong(password: &str) -> bool {
+pub fn is_strong(password: &str) -> bool {
     let result = zxcvbn(password, &[]);
     match result.score() {
         Score::Zero | Score::One | Score::Two | Score::Three => false,

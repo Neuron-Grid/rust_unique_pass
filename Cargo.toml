@@ -20,6 +20,10 @@ rust-embed = { version = "8.4.0", features = ["include-exclude"] }
 unic-langid = "0.9.5"
 zxcvbn = "3.0.1"
 
+[lib]
+name = "rust_unique_pass"
+path = "src/lib.rs"
+
 [[bin]]
 name = "rupass"
 path = "src/main.rs"
