@@ -1,7 +1,7 @@
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [package]
 name = "rust_unique_pass"
-version = "0.8.2"
+version = "0.8.3"
 edition = "2021"
 license = "Apache-2.0"
 description = "A CLI tool for generating a strong password."
@@ -13,12 +13,12 @@ keywords = ["passwords", "generate", "rupass", "cli", "commandline"]
 categories = ["command-line-utilities"]
 
 [dependencies]
-clap = { version = "4.5.4", features = ["derive"] }
+clap = { version = "4.5.18", features = ["derive"] }
 fluent = "0.16.1"
 rand = "0.8.5"
-rust-embed = { version = "8.4.0", features = ["include-exclude"] }
+rust-embed = { version = "8.5.0", features = ["include-exclude"] }
 unic-langid = "0.9.5"
-zxcvbn = "3.0.1"
+zxcvbn = "3.1.0"
 
 [lib]
 name = "rust_unique_pass"
