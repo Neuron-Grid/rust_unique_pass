@@ -12,5 +12,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+mod app_errors;
 pub mod generate_pass;
 pub mod i18n;
+pub mod user_interface;
+
+pub use app_errors::{GenerationError, Result};
+pub use generate_pass::generate_password_flow;
+pub use i18n::{initialize_bundle, parse_args};
+pub use user_interface::StdioInterface;

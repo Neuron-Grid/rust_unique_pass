@@ -13,7 +13,8 @@ keywords = ["passwords", "generate", "rupass", "cli", "commandline"]
 categories = ["command-line-utilities"]
 
 [dependencies]
-clap = { version = "4.5.18", features = ["derive"] }
+thiserror = "2.0.8"
+clap = { version = "4.5.23", features = ["derive"] }
 fluent = "0.16.1"
 rand = "0.8.5"
 rust-embed = { version = "8.5.0", features = ["include-exclude"] }
