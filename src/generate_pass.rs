@@ -30,8 +30,13 @@ pub fn generate_password_flow(
 ) -> Result<String> {
     let generated_password_msg = get_translation(bundle, "generated_password", None)?;
     let length = get_password_length(ui, bundle, args)?;
-    let charset = assemble_character_set(ui, bundle, args)?;
-    let password = produce_secure_password(&charset, length)?;
+
+    // assemble_character_set で (全体の文字セット, 必須文字セット) を取得
+    let (all_chars, required_sets) = assemble_character_set(ui, bundle, args)?;
+
+    // パスワードを生成する
+    let password = produce_secure_password(&all_chars, length, &required_sets)?;
+
     ui.print(&format!("{}\n{}\n", generated_password_msg, &password));
     Ok(password)
 }
@@ -41,36 +46,41 @@ fn get_password_length(
     bundle: &FluentBundle<FluentResource>,
     args: &RupassArgs,
 ) -> Result<usize> {
-    // もし引数で長さが指定されていたら、そのまま使う
+    // CLI引数で長さが指定されていればそれを優先
     if let Some(l) = args.password_length {
         validate_password_length(l)?;
         return Ok(l);
     }
 
-    loop {
-        let prompt = match get_translation(bundle, "question_password_length", None) {
-            Ok(p) => p,
-            Err(_) => "Enter password length:".to_string(),
-        };
-        let input = ui.prompt(&prompt)?;
-        let parsed = input.parse::<usize>();
-        match parsed {
-            Ok(n) => {
-                if let Err(e) = validate_password_length(n) {
-                    print_length_error(ui, bundle, &e)?;
-                    continue;
-                }
-                return Ok(n);
-            }
+    // 未指定の場合、ユーザーに尋ねる
+    let prompt_message = get_translation(bundle, "question_password_length", None)
+        .unwrap_or_else(|_| "Enter password length:".to_string());
+
+    // 入力→パース→バリデーション を繰り返す再起処理
+    fn ask_length(
+        ui: &mut dyn UserInterface,
+        bundle: &FluentBundle<FluentResource>,
+        prompt: &str,
+    ) -> Result<usize> {
+        let input = ui.prompt(prompt)?;
+        match input.parse::<usize>() {
+            Ok(n) => validate_password_length(n).map(|_| n).or_else(|e| {
+                print_length_error(ui, bundle, &e)?;
+                ask_length(ui, bundle, prompt)
+            }),
             Err(_) => {
                 let msg = get_translation(bundle, "error_non_numeric_input", None)
                     .unwrap_or_else(|_| "Input is not numeric.".to_string());
                 ui.print(&msg);
+                ask_length(ui, bundle, prompt)
             }
         }
     }
+
+    ask_length(ui, bundle, &prompt_message)
 }
 
+// 15文字未満はエラー
 pub fn validate_password_length(length: usize) -> Result<()> {
     if length < 15 {
         return Err(GenerationError::InvalidLength);
@@ -92,24 +102,29 @@ fn print_length_error(
     Ok(())
 }
 
+// 全体の文字セットと必須文字セットを返す
 fn assemble_character_set(
     ui: &mut dyn UserInterface,
     bundle: &FluentBundle<FluentResource>,
     args: &RupassArgs,
-) -> Result<String> {
-    let mut assembled_charset = String::new();
+) -> Result<(String, Vec<String>)> {
+    // 1. フラグ指定済みの文字種を追加
+    let initial = (String::new(), Vec::new());
+    let (charset, required) = [
+        (args.numbers, "0123456789"),
+        (args.uppercase, "ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+        (args.lowercase, "abcdefghijklmnopqrstuvwxyz"),
+    ]
+    .iter()
+    .fold(initial, |(mut ac, mut rs), (flag, chars)| {
+        if *flag {
+            ac.push_str(chars);
+            rs.push(chars.to_string());
+        }
+        (ac, rs)
+    });
 
-    // 引数でtrueな場合は先に追加
-    if args.numbers {
-        assembled_charset += "0123456789";
-    }
-    if args.uppercase {
-        assembled_charset += "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    }
-    if args.lowercase {
-        assembled_charset += "abcdefghijklmnopqrstuvwxyz";
-    }
-
+    // 2. フラグが false のものだけ対話的に尋ねて追加
     let questions = [
         (
             "question_uppercase",
@@ -124,27 +139,46 @@ fn assemble_character_set(
         ("question_numbers", "0123456789", args.numbers),
     ];
 
-    for (key, chars, flag) in &questions {
-        if *flag {
-            continue;
-        }
-        let question = get_translation(bundle, key, None)?;
-        if ask_user_yes_no(ui, bundle, &question)? {
-            assembled_charset += chars;
-        }
-    }
+    // foldを用いてイミュータブルに更新
+    let (mut assembled_charset, mut required_sets) = questions.iter().fold(
+        (charset, required),
+        |(ac, rs), (key, chars, already_flag)| {
+            if *already_flag {
+                (ac, rs)
+            } else {
+                // yes/noをユーザーに聞く副作用だけ別関数ask_user_yes_noに任せる
+                let question = match get_translation(bundle, key, None) {
+                    Ok(q) => q,
+                    Err(_) => "".to_string(),
+                };
+                let use_this = ask_user_yes_no(ui, bundle, &question).unwrap_or(false);
+                if use_this {
+                    // 追加
+                    let mut new_ac = ac.clone();
+                    new_ac.push_str(chars);
+                    let mut new_rs = rs.clone();
+                    new_rs.push(chars.to_string());
+                    (new_ac, new_rs)
+                } else {
+                    (ac, rs)
+                }
+            }
+        },
+    );
 
-    // 特殊文字
+    // 3. 特殊文字セットの対話処理
     let special_characters_set = handle_special_characters(ui, bundle, args)?;
     if !special_characters_set.is_empty() {
-        assembled_charset += &special_characters_set;
+        assembled_charset.push_str(&special_characters_set);
+        required_sets.push(special_characters_set);
     }
 
+    // 4. 全体が空ならエラー
     if assembled_charset.is_empty() {
-        return Err(GenerationError::InvalidInput);
+        return Err(GenerationError::NoCharacterSet);
     }
 
-    Ok(assembled_charset)
+    Ok((assembled_charset, required_sets))
 }
 
 fn handle_special_characters(
@@ -167,20 +201,26 @@ fn handle_special_characters(
     let question = get_translation(bundle, "question_special_chars", None)
         .unwrap_or_else(|_| "Use special characters? (y/n)".to_string());
     if ask_user_yes_no(ui, bundle, &question)? {
-        loop {
+        // デフォルトの記号を使うかどうかを再帰的に聞いて決める
+        fn ask_special_chars(
+            ui: &mut dyn UserInterface,
+            bundle: &FluentBundle<FluentResource>,
+        ) -> Result<String> {
             let change_question = get_translation(bundle, "question_change_special_chars", None)
                 .unwrap_or_else(|_| "Change the default special chars? (y/n)".to_string());
             if ask_user_yes_no(ui, bundle, &change_question)? {
                 let enter_message = get_translation(bundle, "question_enter_special_chars", None)
                     .unwrap_or_else(|_| "Enter special chars:".to_string());
                 let special_chars_input = ui.prompt(&enter_message)?;
-                return Ok(special_chars_input);
+                Ok(special_chars_input)
             } else {
-                return Ok(DEFAULT_SPECIAL_CHARS.to_string());
+                Ok(DEFAULT_SPECIAL_CHARS.to_string())
             }
         }
+        ask_special_chars(ui, bundle)
+    } else {
+        Ok("".to_string())
     }
-    Ok("".to_string())
 }
 
 fn ask_user_yes_no(
@@ -188,50 +228,95 @@ fn ask_user_yes_no(
     bundle: &FluentBundle<FluentResource>,
     message: &str,
 ) -> Result<bool> {
-    loop {
-        let input = ui.prompt(message)?;
-        let lower_input = input.to_lowercase();
-        match lower_input.as_str() {
-            "y" | "yes" | "はい" | "ja" => return Ok(true),
-            "n" | "no" | "いいえ" | "nein" => return Ok(false),
+    fn loop_prompt(
+        ui: &mut dyn UserInterface,
+        bundle: &FluentBundle<FluentResource>,
+        msg: &str,
+    ) -> Result<bool> {
+        let input = ui.prompt(msg)?;
+        match input.to_lowercase().as_str() {
+            "y" | "yes" | "はい" | "ja" => Ok(true),
+            "n" | "no" | "いいえ" | "nein" => Ok(false),
             _ => {
                 let error_message = get_translation(bundle, "error_invalid_input", None)
                     .unwrap_or_else(|_| "Invalid input. Please enter yes or no.".to_string());
                 ui.print(&error_message);
+                loop_prompt(ui, bundle, msg)
             }
         }
     }
+    loop_prompt(ui, bundle, message)
 }
 
-pub fn produce_secure_password(chars: &str, length: usize) -> Result<String> {
+// パスワードを強度が十分になるまで生成する
+pub fn produce_secure_password(
+    all_chars: &str,
+    length: usize,
+    required_sets: &[String],
+) -> Result<String> {
     validate_password_length(length)?;
-    let mut attempts = 0;
-    loop {
+
+    // 再帰で試行を重ねる例
+    fn try_generate(
+        all_chars: &str,
+        length: usize,
+        required_sets: &[String],
+        attempts: usize,
+    ) -> Option<String> {
         if attempts > MAX_GENERATION_ATTEMPTS {
-            return Err(GenerationError::GenerationFailed);
+            return None;
         }
-        let password = assemble_random_password(chars, length)?;
+        let password = assemble_random_password(all_chars, length, required_sets)?;
         if is_strong(&password) {
-            return Ok(password);
+            Some(password)
+        } else {
+            try_generate(all_chars, length, required_sets, attempts + 1)
         }
-        attempts += 1;
+    }
+
+    match try_generate(all_chars, length, required_sets, 0) {
+        Some(password) => Ok(password),
+        None => Err(GenerationError::GenerationFailed),
     }
 }
 
-pub fn assemble_random_password(chars: &str, length: usize) -> Result<String> {
-    if chars.is_empty() {
-        return Err(GenerationError::GenerationFailed);
+// ランダムに文字を組み立て、必須文字を最低1文字ずつ含む
+pub fn assemble_random_password(
+    all_chars: &str,
+    length: usize,
+    required_sets: &[String],
+) -> Option<String> {
+    if all_chars.is_empty() {
+        return None;
     }
-    let mut rng: OsRng = OsRng;
-    let chars_vec: Vec<char> = chars.chars().collect();
-    let mut password = String::with_capacity(length);
-    for _ in 0..length {
-        let c = chars_vec
-            .choose(&mut rng)
-            .ok_or(GenerationError::GenerationFailed)?;
-        password.push(*c);
+    let mut rng = OsRng;
+
+    // 1. 必須文字を1文字ずつ確保
+    let required_chars: Vec<char> = required_sets
+        .iter()
+        .filter_map(|set| {
+            let set_chars: Vec<char> = set.chars().collect();
+            set_chars.choose(&mut rng).copied()
+        })
+        .collect();
+
+    // 必須文字数が length を超えたら組み立て不可能
+    if required_chars.len() > length {
+        return None;
     }
-    Ok(password)
+
+    // 2. 残りをランダム埋め
+    let all_chars_vec: Vec<char> = all_chars.chars().collect();
+    let remaining_count = length - required_chars.len();
+    let random_chars: Vec<char> = (0..remaining_count)
+        .filter_map(|_| all_chars_vec.choose(&mut rng).copied())
+        .collect();
+
+    // 3. 全部まとめてシャッフル
+    let mut password_chars = [required_chars, random_chars].concat();
+    password_chars.shuffle(&mut rng);
+
+    Some(password_chars.iter().collect())
 }
 
 fn is_strong(password: &str) -> bool {

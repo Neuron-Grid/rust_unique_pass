@@ -21,6 +21,8 @@ pub enum GenerationError {
     InvalidLength,
     #[error("Password generation failed")]
     GenerationFailed,
+    #[error("No character set selected")]
+    NoCharacterSet,
     #[error("Translation missing: {0}")]
     TranslationMissing(String),
     #[error("IO error: {0}")]
@@ -30,6 +32,7 @@ pub enum GenerationError {
     #[error("Resource parse error")]
     ResourceParseError,
     #[error("Interaction cancelled or invalid input.")]
+    #[allow(dead_code)]
     InvalidInput,
 }
 

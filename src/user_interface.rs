@@ -21,7 +21,7 @@ pub trait UserInterface {
     fn print(&mut self, message: &str);
 }
 
-// 標準入出力実装
+// 標準入出力の実装
 pub struct StdioInterface;
 
 impl UserInterface for StdioInterface {
