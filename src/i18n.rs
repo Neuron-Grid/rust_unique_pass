@@ -26,24 +26,27 @@ const DEFAULT_LANGUAGE: &str = "eng";
 #[include = "*.ftl"]
 struct Translations;
 
+/// 埋め込みリソースを取得し、UTF-8文字列として返す。
 fn get_embedded_resource(filename: &str) -> Option<String> {
     Translations::get(filename)
         .and_then(|data: rust_embed::EmbeddedFile| String::from_utf8(data.data.to_vec()).ok())
 }
 
+/// 言語コード文字列を `LanguageIdentifier` に変換する。
 fn map_to_fluent_code(code: &str) -> Result<LanguageIdentifier> {
     LanguageIdentifier::from_str(code).map_err(|_| GenerationError::UnsupportedLanguage)
 }
 
-pub fn initialize_bundle(args: &RupassArgs) -> Result<FluentBundle<FluentResource>> {
-    let language = args
-        .language
+/// コマンドライン引数から言語を解決し、文字列で返す。
+/// 引数で指定されていなければデフォルト言語 (eng) を返す。
+fn resolve_language(args: &RupassArgs) -> String {
+    args.language
         .as_ref()
         .map(|l| l.to_string())
-        .unwrap_or_else(|| DEFAULT_LANGUAGE.to_string());
-    load_fluent_bundle(&language)
+        .unwrap_or_else(|| DEFAULT_LANGUAGE.to_string())
 }
 
+/// 指定された言語文字列をもとに FluentBundle を生成して返す。
 fn load_fluent_bundle(language: &str) -> Result<FluentBundle<FluentResource>> {
     let langid = map_to_fluent_code(language)?;
     let resource_filename = format!("{}.ftl", langid);
@@ -61,6 +64,13 @@ fn load_fluent_bundle(language: &str) -> Result<FluentBundle<FluentResource>> {
     Ok(bundle)
 }
 
+/// コマンドライン引数から言語設定を取得し、それに対応する FluentBundle を初期化する。
+pub fn initialize_bundle(args: &RupassArgs) -> Result<FluentBundle<FluentResource>> {
+    let language = resolve_language(args);
+    load_fluent_bundle(&language)
+}
+
+/// FluentBundle から指定キーのメッセージを取得し、引数があれば適用して返す。
 pub fn get_translation<'bundle>(
     bundle: &'bundle FluentBundle<FluentResource>,
     key: &str,
@@ -99,6 +109,7 @@ pub struct RupassArgs {
     pub lowercase: bool,
 }
 
+/// コマンドライン引数をパースしてRupassArgsを生成する。
 pub fn parse_args() -> RupassArgs {
     RupassArgs::parse()
 }

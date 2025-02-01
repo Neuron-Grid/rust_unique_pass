@@ -65,6 +65,7 @@ fn get_test_bundle() -> FluentBundle<FluentResource> {
 fn test_validate_password_length() -> std::result::Result<(), GenerationError> {
     let err = validate_password_length(10).expect_err("Expected an error for length 10");
     assert!(matches!(err, GenerationError::InvalidLength));
+
     validate_password_length(15)?;
     validate_password_length(20)?;
     Ok(())
@@ -73,21 +74,36 @@ fn test_validate_password_length() -> std::result::Result<(), GenerationError> {
 #[test]
 fn test_assemble_random_password() -> std::result::Result<(), GenerationError> {
     let chars = "ABC123";
-    let pwd = assemble_random_password(chars, 10)?;
+    let required_sets = Vec::new();
+    let pwd = assemble_random_password(chars, 10, &required_sets)
+        .ok_or(GenerationError::GenerationFailed)?;
     assert_eq!(pwd.len(), 10);
     assert!(pwd.chars().all(|c| chars.contains(c)));
 
-    let err =
-        assemble_random_password("", 10).expect_err("Expected GenerationError for empty chars");
-    assert!(matches!(err, GenerationError::GenerationFailed));
+    let none_case = assemble_random_password("", 10, &required_sets);
+    assert!(
+        none_case.is_none(),
+        "Expected None (GenerationError for empty chars)"
+    );
     Ok(())
 }
 
 #[test]
 fn test_produce_secure_password() -> std::result::Result<(), GenerationError> {
+    // produce_secure_password には必須文字セットを渡す必要がある
     let chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!?@#$%^&*()";
-    let pwd = produce_secure_password(chars, 15)?;
+    // すべての文字種を必須セットに含める
+    let required_sets = vec![
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ".to_string(),
+        "abcdefghijklmnopqrstuvwxyz".to_string(),
+        "0123456789".to_string(),
+        "!?@#$%^&*()".to_string(),
+    ];
+
+    // 15文字で強度がScore::Fourに到達するようランダム生成を試みる
+    let pwd = produce_secure_password(chars, 15, &required_sets)?;
     assert!(pwd.len() >= 15);
+    // zxcvbn スコアが 4 に達していることを期待
     Ok(())
 }
 
@@ -113,6 +129,7 @@ fn test_generate_password_flow_mock_ui() -> std::result::Result<(), GenerationEr
 
 #[test]
 fn test_generate_password_flow_integration() -> std::result::Result<(), GenerationError> {
+    // CLIフラグですべて指定し、対話は行わずに生成
     let args = RupassArgs {
         language: None,
         symbols: true,
