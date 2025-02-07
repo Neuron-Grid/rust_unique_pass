@@ -16,7 +16,8 @@ use crate::app_errors::{GenerationError, Result};
 use crate::i18n::{get_translation, RupassArgs};
 use crate::user_interface::UserInterface;
 use fluent::{FluentArgs, FluentBundle, FluentResource, FluentValue};
-use rand::{prelude::SliceRandom, rngs::OsRng};
+use rand::prelude::SliceRandom;
+use rand::seq::IndexedRandom as _;
 use std::collections::HashMap;
 use zxcvbn::{zxcvbn, Score};
 
@@ -316,9 +317,8 @@ pub fn assemble_random_password(
     if all_chars.is_empty() {
         return None;
     }
-    let mut rng = OsRng;
+    let mut rng = rand::rng();
 
-    //  必須文字を1文字ずつ確保
     let required_chars: Vec<char> = required_sets
         .iter()
         .filter_map(|set| {
@@ -327,19 +327,16 @@ pub fn assemble_random_password(
         })
         .collect();
 
-    // 必須文字数がlengthを超えたら組み立て不可能
     if required_chars.len() > length {
         return None;
     }
 
-    // 残りをランダム埋め
     let all_chars_vec: Vec<char> = all_chars.chars().collect();
     let remaining_count = length - required_chars.len();
     let random_chars: Vec<char> = (0..remaining_count)
         .filter_map(|_| all_chars_vec.choose(&mut rng).copied())
         .collect();
 
-    // 全部まとめてシャッフル
     let mut password_chars = [required_chars, random_chars].concat();
     password_chars.shuffle(&mut rng);
 
