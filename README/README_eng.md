@@ -39,15 +39,6 @@ rupass -l jpn
   rupass
   ```
 
-## This software utilizes the following crates
-GitHub repository
-- [clap](https://github.com/clap-rs/clap)
-- [fluent-rs](https://github.com/projectfluent/fluent-rs)
-- [rand](https://github.com/rust-random/rand)
-- [rust-embed](https://github.com/pyrossh/rust-embed)
-- [unic-locale](https://github.com/zbraniecki/unic-locale)
-- [zxcvbn-rs](https://github.com/shssoichiro/zxcvbn-rs)
-
 ## Request for collaboration.
 This project is intended to be multilingual.
 If you would like to help with translation, please see [CONTRIBUTING](../CONTRIBUTING/English.md).

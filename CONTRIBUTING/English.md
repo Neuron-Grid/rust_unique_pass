@@ -1,6 +1,6 @@
 ## CONTRIBUTING
 As this project is developed by me personally, I have limited resources and time.
-Basically, I will focus on fixing bugs, enhancing stability and speeding up the operation.
+Basically, the focus is on fixing bugs and enhancing stability.
 
 ## Future plans
 - Improve the quality of the code

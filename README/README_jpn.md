@@ -47,16 +47,6 @@ rupass -l jpn
   rupass
   ```
 
-
-## このソフトウェアは以下のクレートを利用しています
-GitHub repository
-- [clap](https://github.com/clap-rs/clap)<br>
-- [fluent-rs](https://github.com/projectfluent/fluent-rs)<br>
-- [rand](https://github.com/rust-random/rand)<br>
-- [rust-embed](https://github.com/pyrossh/rust-embed)<br>
-- [unic-locale](https://github.com/zbraniecki/unic-locale)<br>
-- [zxcvbn-rs](https://github.com/shssoichiro/zxcvbn-rs)<br>
-
 ## 協力のお願い
 このプロジェクトは、多言語対応を目指しています。
 翻訳にご協力いただける方は、[CONTRIBUTING](../CONTRIBUTING.md)をご覧ください。
