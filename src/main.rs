@@ -12,15 +12,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
-mod app_errors;
-mod generate_pass;
-mod i18n;
-mod user_interface;
-
-use crate::app_errors::Result;
-use crate::generate_pass::generate_password_flow;
-use crate::i18n::{initialize_bundle, parse_args};
-use crate::user_interface::StdioInterface;
+use rust_unique_pass::{
+    app_errors::Result,
+    generate_pass::generate_password_flow,
+    i18n::{initialize_bundle, parse_args},
+    user_interface::StdioInterface,
+};
 
 fn main() -> Result<()> {
     let args = parse_args();
