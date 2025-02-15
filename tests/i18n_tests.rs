@@ -14,11 +14,8 @@ limitations under the License. */
 
 use clap::Parser;
 use fluent::FluentArgs;
-use rust_unique_pass::i18n::{get_translation, RupassArgs};
-use rust_unique_pass::initialize_bundle;
-use rust_unique_pass::GenerationError;
-use std::str::FromStr;
-use unic_langid::subtags::Language;
+use rust_unique_pass::i18n::get_translation;
+use rust_unique_pass::{initialize_bundle, GenerationError, RupassArgs};
 
 #[test]
 fn test_parse_args_default() {
@@ -33,10 +30,13 @@ fn test_parse_args_default() {
 
 #[test]
 fn test_parse_args_custom() {
-    let args =
-        RupassArgs::parse_from(&["test_app", "-l", "eng", "-s", "-c", "20", "-n", "-u", "-w"]);
-    let parsed_language = Language::from_str("eng").expect("Failed to parse language code 'eng'");
-    assert_eq!(args.language, Some(parsed_language));
+    let args = RupassArgs::parse_from(&[
+        // ポジション引数
+        "test_app", "-l", "eng", "-s", "-n", "-u", "-w", "20",
+    ]);
+
+    // language は文字列のengが入る
+    assert_eq!(args.language, Some("eng".to_string()));
     assert_eq!(args.symbols, true);
     assert_eq!(args.password_length, Some(20));
     assert_eq!(args.numbers, true);
@@ -65,9 +65,9 @@ fn test_initialize_bundle_default() {
 
 #[test]
 fn test_initialize_bundle_unsupported_language() {
-    let parsed_language = Language::from_str("zzz").expect("Failed to parse language code 'zzz'");
+    // unsupported 言語としてzzzを直接入れる
     let args = RupassArgs {
-        language: Some(parsed_language),
+        language: Some("zzz".to_string()),
         symbols: false,
         password_length: None,
         numbers: false,
@@ -84,9 +84,8 @@ fn test_initialize_bundle_unsupported_language() {
 
 #[test]
 fn test_get_translation() {
-    let parsed_language = Language::from_str("eng").expect("Failed to parse language code 'eng'");
     let args = RupassArgs {
-        language: Some(parsed_language),
+        language: Some("eng".to_string()),
         symbols: false,
         password_length: None,
         numbers: false,
@@ -102,9 +101,8 @@ fn test_get_translation() {
 
 #[test]
 fn test_get_translation_with_args() {
-    let parsed_language = Language::from_str("eng").expect("Failed to parse language code 'eng'");
     let args = RupassArgs {
-        language: Some(parsed_language),
+        language: Some("eng".to_string()),
         symbols: false,
         password_length: None,
         numbers: false,

@@ -17,7 +17,7 @@ use clap::Parser;
 use fluent::{FluentArgs, FluentBundle, FluentResource};
 use rust_embed::RustEmbed;
 use std::str::FromStr;
-use unic_langid::{subtags::Language, LanguageIdentifier};
+use unic_langid::LanguageIdentifier;
 
 const DEFAULT_LANGUAGE: &str = "eng";
 
@@ -90,23 +90,54 @@ pub fn get_translation<'bundle>(
 
 #[derive(Parser, Debug, PartialEq)]
 pub struct RupassArgs {
-    #[arg(short = 'l', long = "language", value_name = "LANGUAGE")]
-    pub language: Option<Language>,
+    // 設定言語を指定する
+    #[clap(
+        short = 'l',
+        long = "language",
+        value_name = "LANGUAGE",
+        help = "Specifies the language for user prompts and messages.\
+            \nSpecify the language code as defined by ISO639-3.\
+            \nSupported languages: Japanese, English, and German.\
+            \nDefault language: English"
+    )]
+    pub language: Option<String>,
 
-    #[arg(short = 's', long = "symbols")]
-    pub symbols: bool,
-
-    #[arg(short = 'c', long = "count", value_name = "PASSWORD_LENGTH")]
+    // パスワード長を指定する（バグ修正として追加）
+    #[clap()]
     pub password_length: Option<usize>,
 
-    #[arg(short = 'n', long = "numbers")]
+    // 数字を含むかどうかのフラグ
+    #[clap(
+        short = 'n',
+        long = "numbers",
+        help = "Include numbers in the password."
+    )]
     pub numbers: bool,
 
-    #[arg(short = 'u', long = "uppercase")]
+    // 大文字を含むかどうかのフラグ
+    #[clap(
+        short = 'u',
+        long = "uppercase",
+        help = "Include uppercase letters in the password."
+    )]
     pub uppercase: bool,
 
-    #[arg(short = 'w', long = "lowercase")]
+    // 小文字を含むかどうかのフラグ
+    #[clap(
+        short = 'w',
+        long = "lowercase",
+        help = "Include lowercase letters in the password."
+    )]
     pub lowercase: bool,
+
+    // 特殊記号を含むかどうかのフラグ
+    #[clap(
+        short = 's',
+        long = "symbols",
+        help = "Include symbols in the password.\
+        \nAs a default setting, !@#$%^&*() is used."
+    )]
+    pub symbols: bool,
 }
 
 /// コマンドライン引数をパースしてRupassArgsを生成する。

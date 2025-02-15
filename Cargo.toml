@@ -1,12 +1,12 @@
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [package]
 name = "rust_unique_pass"
-version = "0.8.5"
+version = "0.8.6"
 edition = "2021"
 license = "Apache-2.0"
 description = "A CLI tool for generating a strong password."
 authors = ["Neuron Grid <neuron-grid@neuron-grid.net>"]
-documentation = "https://docs.rs/crate/rust_unique_pass/latest"
+documentation = "https://docs.rs/rust_unique_pass"
 repository = "https://gitlab.com/Neuron-Grid/rust_unique_pass"
 readme = "README/README_eng.md"
 keywords = ["passwords", "generate", "rupass", "cli", "commandline"]
