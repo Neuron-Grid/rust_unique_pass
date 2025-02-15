@@ -19,5 +19,5 @@ pub mod user_interface;
 
 pub use app_errors::{GenerationError, Result};
 pub use generate_pass::generate_password_flow;
-pub use i18n::{initialize_bundle, parse_args};
+pub use i18n::{initialize_bundle, parse_args, RupassArgs};
 pub use user_interface::StdioInterface;

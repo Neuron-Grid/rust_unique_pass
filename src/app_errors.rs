@@ -32,7 +32,6 @@ pub enum GenerationError {
     #[error("Resource parse error")]
     ResourceParseError,
     #[error("Interaction cancelled or invalid input.")]
-    #[allow(dead_code)]
     InvalidInput,
 }
 

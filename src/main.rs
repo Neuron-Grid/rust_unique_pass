@@ -13,16 +13,17 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 use rust_unique_pass::{
-    app_errors::Result,
-    generate_pass::generate_password_flow,
-    i18n::{initialize_bundle, parse_args},
-    user_interface::StdioInterface,
+    generate_password_flow, initialize_bundle, parse_args, Result, StdioInterface,
 };
 
 fn main() -> Result<()> {
+    // コマンドライン引数をパース
     let args = parse_args();
+    // 翻訳バンドルの初期化
     let bundle = initialize_bundle(&args)?;
+    // CLI入出力（標準入出力）インターフェース
     let mut ui = StdioInterface;
+    // パスワードの生成
     generate_password_flow(&mut ui, &bundle, &args)?;
     Ok(())
 }

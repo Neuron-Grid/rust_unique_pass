@@ -16,8 +16,9 @@ use fluent::{FluentBundle, FluentResource};
 use rust_unique_pass::generate_pass::{
     assemble_random_password, produce_secure_password, validate_password_length,
 };
-use rust_unique_pass::i18n::RupassArgs;
-use rust_unique_pass::{generate_password_flow, GenerationError, Result, StdioInterface};
+use rust_unique_pass::{
+    generate_password_flow, GenerationError, Result, RupassArgs, StdioInterface,
+};
 use std::collections::VecDeque;
 use unic_langid::LanguageIdentifier;
 
