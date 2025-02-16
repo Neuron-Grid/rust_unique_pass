@@ -1,4 +1,4 @@
-/* Copyright 2023-2024 Neuron Grid
+/* Copyright 2023-2025 Neuron Grid
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -102,8 +102,14 @@ pub struct RupassArgs {
     )]
     pub language: Option<String>,
 
-    // パスワード長を指定する（バグ修正として追加）
-    #[clap()]
+    // パスワード長を指定する
+    #[clap(
+        short = 'p',
+        long = "password-length",
+        value_name = "PASSWORD_LENGTH",
+        help = "Specify the length of the password. \
+            \nIf omitted, a default length is used."
+    )]
     pub password_length: Option<usize>,
 
     // 数字を含むかどうかのフラグ
@@ -134,8 +140,9 @@ pub struct RupassArgs {
     #[clap(
         short = 's',
         long = "symbols",
-        help = "Include symbols in the password.\
-        \nAs a default setting, !@#$%^&*() is used."
+        help = "Include symbols in passwords.\
+        \nBy default, the symbols !@#$%^&*() are used.\
+        \nYou can change which special symbols are used."
     )]
     pub symbols: bool,
 }
