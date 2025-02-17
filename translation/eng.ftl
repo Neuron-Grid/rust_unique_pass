@@ -1,4 +1,4 @@
-# Copyright 2023 Neuron Grid
+# Copyright 2023-2025 Neuron Grid
 # Licensed under the Apache License, Version 2.0.
 # See the LICENSE file for full details.
 
@@ -27,7 +27,7 @@ question_special_chars = "Include special characters?"
 question_uppercase = "Include uppercase letters?"
 
 # default messages
-default_special_chars_message = "The special character used by default is { $specialChars }."
+default_special_chars_message = "The special characters used by default are: { $specialChars }"
 
 # Other messages
 generated_password = "Password Generation Result"

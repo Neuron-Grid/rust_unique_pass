@@ -1,4 +1,4 @@
-/* Copyright 2023-2024 Neuron Grid
+/* Copyright 2023-2025 Neuron Grid
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ use rand::prelude::SliceRandom;
 use rand::seq::IndexedRandom as _;
 use zxcvbn::{zxcvbn, Score};
 
-const DEFAULT_SPECIAL_CHARS: &str = "!?@#$%^&*()";
+const DEFAULT_SPECIAL_CHARS: &str = "~!@#$%^&*_-+=(){}[]:;<>,.?/";
 const MAX_GENERATION_ATTEMPTS: usize = 100000;
 
 /// 小さなヘルパー関数:
@@ -63,7 +63,6 @@ where
     }
 }
 
-/// メインのパスワード生成フロー
 /// メインのパスワード生成フロー
 pub fn generate_password_flow(
     ui: &mut dyn UserInterface,
@@ -115,7 +114,7 @@ pub fn generate_password_flow(
 /// パスワード長を取得する
 /// CLI引数にあればそれを優先
 /// なければ対話的に入力を受け付ける
-pub fn get_password_length(
+fn get_password_length(
     ui: &mut dyn UserInterface,
     bundle: &FluentBundle<FluentResource>,
     args: &RupassArgs,
@@ -154,7 +153,7 @@ pub fn get_password_length(
 }
 
 /// パスワード長が15文字未満の場合はエラー
-pub fn validate_password_length(length: usize) -> Result<()> {
+fn validate_password_length(length: usize) -> Result<()> {
     if length < 15 {
         return Err(GenerationError::InvalidLength);
     }
@@ -181,7 +180,7 @@ fn print_length_error(
 }
 
 /// 指定した文字集合で、強度が十分なパスワードを生成する
-pub fn produce_secure_password(
+fn produce_secure_password(
     all_chars: &str,
     length: usize,
     required_sets: &[String],
@@ -328,7 +327,6 @@ fn ask_user_yes_no(
     Ok(result)
 }
 
-/// 特殊文字の対話処理
 fn handle_special_characters(
     ui: &mut dyn UserInterface,
     bundle: &FluentBundle<FluentResource>,
@@ -339,14 +337,20 @@ fn handle_special_characters(
         return Ok(DEFAULT_SPECIAL_CHARS.to_string());
     }
 
+    // 翻訳ファイルの { $specialChars } を置換するための引数をセット
+    let mut fargs = FluentArgs::new();
+    fargs.set("specialChars", DEFAULT_SPECIAL_CHARS);
+
+    // デフォルトの特殊文字を案内するメッセージを表示
     let default_msg = fallback_translation(
         bundle,
         "default_special_chars_message",
-        "Default special chars: !?@#$%^&*()",
-        None,
+        &format!("Default special chars: {}", DEFAULT_SPECIAL_CHARS),
+        Some(&fargs),
     );
     ui.print(&default_msg);
 
+    // 「特殊文字を使うかどうか」尋ねる
     let question = fallback_translation(
         bundle,
         "question_special_chars",
@@ -354,10 +358,11 @@ fn handle_special_characters(
         None,
     );
 
+    // ユーザーが「はい(Y)」なら対話形式で特殊文字を決める
     if ask_user_yes_no(ui, bundle, &question)? {
-        // デフォルトを使うかカスタマイズするか
         ask_special_chars(ui, bundle)
     } else {
+        // ユーザーが「いいえ(N)」なら空文字列を返す
         Ok("".to_string())
     }
 }
