@@ -141,7 +141,7 @@ pub struct RupassArgs {
         short = 's',
         long = "symbols",
         help = "Include symbols in passwords.\
-        \nBy default, the symbols !@#$%^&*() are used.\
+        \nBy default, the symbols ~!@#$%^&*_-+=(){}[]:;<>,.?/ are used.\
         \nYou can change which special symbols are used."
     )]
     pub symbols: bool,

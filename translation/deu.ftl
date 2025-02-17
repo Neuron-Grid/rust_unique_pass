@@ -1,4 +1,4 @@
-# Copyright 2023 Neuron Grid
+# Copyright 2023-2025 Neuron Grid
 # Licensed under the Apache License, Version 2.0.
 # See the LICENSE file for full details.
 
@@ -27,7 +27,7 @@ question_uppercase = "Möchten Sie Großbuchstaben verwenden?"
 question_numbers = "Verwenden Sie Zahlen?"
 
 # default messages
-default_special_chars_message = "Das standardmäßig verwendete Sonderzeichen ist { $specialChars }."
+default_special_chars_message = "Die standardmäßig verwendeten Sonderzeichen sind: { $specialChars }"
 
 # Other messages
 generated_password = "Das Passwort wurde generiert."
