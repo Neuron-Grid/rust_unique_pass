@@ -20,7 +20,7 @@ use rand::prelude::SliceRandom;
 use rand::seq::IndexedRandom as _;
 use zxcvbn::{zxcvbn, Score};
 
-const DEFAULT_SPECIAL_CHARS: &str = "!?@#$%^&*()";
+const DEFAULT_SPECIAL_CHARS: &str = "~!@#$%^&*_-+=(){}[]:;<>,.?/";
 const MAX_GENERATION_ATTEMPTS: usize = 100000;
 
 /// 小さなヘルパー関数:
@@ -114,7 +114,7 @@ pub fn generate_password_flow(
 /// パスワード長を取得する
 /// CLI引数にあればそれを優先
 /// なければ対話的に入力を受け付ける
-pub fn get_password_length(
+fn get_password_length(
     ui: &mut dyn UserInterface,
     bundle: &FluentBundle<FluentResource>,
     args: &RupassArgs,
@@ -153,7 +153,7 @@ pub fn get_password_length(
 }
 
 /// パスワード長が15文字未満の場合はエラー
-pub fn validate_password_length(length: usize) -> Result<()> {
+fn validate_password_length(length: usize) -> Result<()> {
     if length < 15 {
         return Err(GenerationError::InvalidLength);
     }
@@ -180,7 +180,7 @@ fn print_length_error(
 }
 
 /// 指定した文字集合で、強度が十分なパスワードを生成する
-pub fn produce_secure_password(
+fn produce_secure_password(
     all_chars: &str,
     length: usize,
     required_sets: &[String],
@@ -327,7 +327,7 @@ fn ask_user_yes_no(
     Ok(result)
 }
 
-pub fn handle_special_characters(
+fn handle_special_characters(
     ui: &mut dyn UserInterface,
     bundle: &FluentBundle<FluentResource>,
     args: &RupassArgs,
