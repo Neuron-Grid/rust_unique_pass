@@ -13,17 +13,14 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 use rust_unique_pass::{
-    generate_password_flow, initialize_bundle, parse_args, Result, StdioInterface,
+    Result, StdioInterface, generate_password_flow, initialize_bundle, parse_args,
 };
 
-fn main() -> Result<()> {
-    // コマンドライン引数をパース
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<()> {
     let args = parse_args();
-    // 翻訳バンドルの初期化
     let bundle = initialize_bundle(&args)?;
-    // CLI入出力（標準入出力）インターフェース
-    let mut ui = StdioInterface;
-    // パスワードの生成
-    generate_password_flow(&mut ui, &bundle, &args)?;
+    let mut ui = StdioInterface::default();
+    generate_password_flow(&mut ui, &bundle, &args).await?;
     Ok(())
 }

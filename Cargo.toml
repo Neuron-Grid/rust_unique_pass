@@ -1,25 +1,30 @@
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [package]
 name = "rust_unique_pass"
-version = "0.8.7"
-edition = "2021"
+version = "0.9.0"
+edition = "2024"
 license = "Apache-2.0"
 description = "A CLI tool for generating a strong password."
 authors = ["Neuron Grid <neuron-grid@neuron-grid.net>"]
 documentation = "https://docs.rs/rust_unique_pass"
-repository = "https://gitlab.com/Neuron-Grid/rust_unique_pass"
+repository = "https://github.com/Neuron-Grid/rust_unique_pass"
 readme = "README/README_eng.md"
 keywords = ["passwords", "generate", "rupass", "cli", "commandline"]
 categories = ["command-line-utilities"]
 
 [dependencies]
-thiserror = "2.0.11"
-clap = { version = "4.5.28", features = ["derive"] }
+thiserror = "2.0.12"
+clap = { version = "4.5.37", features = ["derive"] }
 fluent = "0.16.1"
-rand = "0.9.0"
-rust-embed = { version = "8.5.0", features = ["include-exclude"] }
+rand = "0.9.1"
+rust-embed = { version = "8.7.0", features = ["include-exclude"] }
 unic-langid = "0.9.5"
 zxcvbn = "3.1.0"
+tokio = { version = "1.44.2", features = ["full"] }
+async-trait = "0.1.88"
+futures = { version = "0.3.31", default-features = false, features = ["alloc"] }
+zeroize = "1.8.1"
+zeroize_derive = { version = "1.4.2", optional = true }
 
 [lib]
 name = "rust_unique_pass"

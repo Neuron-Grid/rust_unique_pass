@@ -13,27 +13,55 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 use crate::app_errors::Result;
-use std::io::{self, Write};
+use async_trait::async_trait;
+use tokio::io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader};
 
-// ユーザーとの入出力を抽象化するトレイト
+/// ユーザーとのI/Oを抽象化
+#[async_trait(?Send)]
 pub trait UserInterface {
-    fn prompt(&mut self, message: &str) -> Result<String>;
-    fn print(&mut self, message: &str);
+    async fn prompt(&mut self, message: &str) -> Result<String>;
+    async fn print(&mut self, message: &str) -> Result<()>;
 }
 
-// 標準入出力の実装
-pub struct StdioInterface;
+/// 標準入出力実装
+/// BufReaderを再利用
+pub struct StdioInterface {
+    reader: BufReader<io::Stdin>,
+}
 
+impl Default for StdioInterface {
+    fn default() -> Self {
+        Self {
+            reader: BufReader::new(io::stdin()),
+        }
+    }
+}
+
+impl StdioInterface {
+    /// 明示的なコンストラクタ
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+#[async_trait(?Send)]
 impl UserInterface for StdioInterface {
-    fn prompt(&mut self, message: &str) -> Result<String> {
-        println!("{}", message);
-        io::stdout().flush()?;
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        Ok(input.trim().to_string())
+    /// プロンプトを表示して1行読み取る
+    async fn prompt(&mut self, message: &str) -> Result<String> {
+        let mut stdout = io::stdout();
+        stdout.write_all(format!("{message}\n").as_bytes()).await?;
+        stdout.flush().await?;
+
+        let mut line = String::new();
+        self.reader.read_line(&mut line).await?;
+        Ok(line.trim().to_owned())
     }
 
-    fn print(&mut self, message: &str) {
-        println!("{}", message);
+    /// メッセージを出力
+    async fn print(&mut self, message: &str) -> Result<()> {
+        let mut stdout = io::stdout();
+        stdout.write_all(format!("{message}\n").as_bytes()).await?;
+        stdout.flush().await?;
+        Ok(())
     }
 }

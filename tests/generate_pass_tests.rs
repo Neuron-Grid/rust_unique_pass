@@ -12,53 +12,50 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+use async_trait::async_trait;
 use fluent::{FluentBundle, FluentResource};
-use rust_unique_pass::user_interface::UserInterface;
-use rust_unique_pass::{generate_password_flow, GenerationError, Result, RupassArgs};
+use rust_unique_pass::{
+    app_errors::{GenerationError, Result},
+    generate_password_flow,
+    i18n::RupassArgs,
+    user_interface::UserInterface,
+};
+use std::collections::VecDeque;
 
-/// テスト用のMock UI
-/// 指定された入力列を順番に返し、printの内容は内部に保存する。
+// Mock UI
+#[derive(Default)]
 struct MockUI {
-    /// promptで返す入力のキュー
-    inputs: Vec<String>,
-    /// printされた内容を保存するバッファ
+    inputs: VecDeque<String>,
     outputs: Vec<String>,
 }
 
 impl MockUI {
-    fn new(inputs: Vec<&str>) -> Self {
+    fn new(src: Vec<&str>) -> Self {
         Self {
-            inputs: inputs.into_iter().map(|s| s.to_string()).collect(),
+            inputs: src.into_iter().map(String::from).collect(),
             outputs: Vec::new(),
         }
     }
-
-    /// テスト後に出力内容を確認しやすくするためのヘルパー
-    fn get_outputs(&self) -> &[String] {
-        &self.outputs
+    fn outputs_joined(&self) -> String {
+        self.outputs.join("")
     }
 }
 
+#[async_trait(?Send)]
 impl UserInterface for MockUI {
-    fn prompt(&mut self, _message: &str) -> Result<String> {
-        if let Some(input) = self.inputs.pop() {
-            Ok(input)
-        } else {
-            // 入力が尽きたらエラーを返す
-            Err(GenerationError::InvalidInput)
-        }
+    async fn prompt(&mut self, _msg: &str) -> Result<String> {
+        self.inputs.pop_front().ok_or(GenerationError::InvalidInput)
     }
-
-    fn print(&mut self, message: &str) {
-        self.outputs.push(message.to_string());
+    async fn print(&mut self, msg: &str) -> Result<()> {
+        self.outputs.push(msg.to_owned());
+        Ok(())
     }
 }
 
-/// 実際の翻訳バンドルを読み込みたくない/できない場合のため、
-/// モック的なBundleを作るヘルパー関数
-fn mock_fluent_bundle() -> FluentBundle<FluentResource> {
-    // ここでは最小限の翻訳データを直接文字列定義
-    let ftl_string = r#"
+// Fluent bundle
+// 最小の疑似翻訳
+fn mock_bundle() -> FluentBundle<FluentResource> {
+    let ftl = r#"
 generated_password = Generated password:
 error_no_charset_selected = No valid character set was selected.
 error_generation = Error generating password.
@@ -73,18 +70,28 @@ question_change_special_chars = Change the default special chars?
 question_enter_special_chars = Enter special chars:
 error_invalid_input = Invalid input. Please enter yes or no.
 "#;
-    let resource = FluentResource::try_new(ftl_string.to_string()).expect("Failed to parse FTL");
-    let mut bundle = FluentBundle::new(vec![]);
-    bundle
-        .add_resource(resource)
-        .expect("Failed to add FTL resource");
-    bundle
+    let res = FluentResource::try_new(ftl.to_owned()).unwrap();
+    let mut b = FluentBundle::new(vec![]);
+    b.add_resource(res).unwrap();
+    b
 }
 
-/// テスト1: 正常系 (15文字, uppercase/numbersフラグのみtrue)
-#[test]
-fn test_generate_password_flow_normal() {
-    // コマンドライン引数を想定
+// Helper
+// 生成されたパスワード行を取り出す
+fn extract_password(output: &str) -> Option<String> {
+    output
+        .split("Generated password:")
+        // 末尾側
+        .last()
+        // 改行と空白を除去
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+}
+// Tests
+#[tokio::test(flavor = "current_thread")]
+async fn normal_flow() {
+    // 事前に長さ + フラグを固定
     let args = RupassArgs {
         language: None,
         password_length: Some(15),
@@ -94,34 +101,21 @@ fn test_generate_password_flow_normal() {
         symbols: false,
     };
 
-    // バンドルはモック化
-    let bundle = mock_fluent_bundle();
+    // lowercase? → "n"だけ回答
+    let mut ui = MockUI::new(vec!["n", "n"]);
+    generate_password_flow(&mut ui, &mock_bundle(), &args)
+        .await
+        .unwrap();
 
-    // uppercase+numbersのみの文字セットで15文字パスが生成される想定
-    let mut ui = MockUI::new(vec![
-        "n", // lowercase
-        "n", // symbols
-    ]);
-
-    let result = generate_password_flow(&mut ui, &bundle, &args);
-    assert!(result.is_ok());
-
-    // 出力に "Generated password:" が含まれているか
-    let out = ui.get_outputs().join("\n");
-    assert!(
-        out.contains("Generated password:"),
-        "Should contain 'Generated password:' text"
-    );
-
-    // 返されたパスワードの長さ確認
-    let generated_password = result.unwrap();
-    assert_eq!(generated_password.len(), 15);
+    let out = ui.outputs_joined();
+    let pwd = extract_password(&out).expect("password not found");
+    assert_eq!(pwd.len(), 15);
+    assert!(out.contains("Generated password:"));
 }
 
-/// パスワード長が短い場合のエラー (対話モード)
-#[test]
-fn test_generate_password_flow_too_short_interactive() {
-    // 対話入力をしない (CLI引数なし) 場合 -> get_password_length が最初に呼ばれる
+#[tokio::test(flavor = "current_thread")]
+async fn too_short_interactive() {
+    // すべてフラグ無しで対話
     let args = RupassArgs {
         language: None,
         password_length: None,
@@ -130,55 +124,43 @@ fn test_generate_password_flow_too_short_interactive() {
         lowercase: false,
         symbols: false,
     };
-    let bundle = mock_fluent_bundle(); // テスト用バンドル
 
-    // 入力の順序に注意
-    // 最初の3回の入力はパスワード長用 (10 -> エラー, 14 -> エラー, 15 -> OK)
-    // その後 uppercase? -> n, lowercase? -> y, numbers? -> n, special chars? -> n
-    let mut ui = MockUI::new(vec![
-        "n",  // 7th pop -> special chars
-        "n",  // 6th pop -> numbers?
-        "y",  // 5th pop -> lowercase?
-        "n",  // 4th pop -> uppercase?
-        "15", // 3rd pop -> password length = 15
-        "14", // 2nd pop -> password length = 14
-        "10", // 1st pop -> password length = 10
-    ]);
+    // ①10 → too short ②14 → too short ③15 → OK
+    // その後：uppercase? n / lowercase? n / numbers? y / symbols? n
+    let inputs = vec!["10", "14", "15", "n", "n", "y", "n"];
+    let mut ui = MockUI::new(inputs);
 
-    let result = generate_password_flow(&mut ui, &bundle, &args);
-    assert!(result.is_ok(), "Should eventually succeed with length 15");
+    generate_password_flow(&mut ui, &mock_bundle(), &args)
+        .await
+        .unwrap();
 
-    // 短すぎるパスワード時に2回エラーメッセージが表示されるはず
-    let out = ui.get_outputs().join("\n");
-    let count_too_short = out.matches("Password is too short.").count();
-    assert_eq!(count_too_short, 2, "Should show 'too short' message twice");
+    let short_msg_count = ui
+        .outputs_joined()
+        .matches("Password is too short.")
+        .count();
+    assert_eq!(short_msg_count, 2);
 }
 
-/// 引数でパスワード長 10 (15未満) を指定した場合 -> 即エラー
-#[test]
-fn test_generate_password_flow_too_short_args() {
+#[tokio::test(flavor = "current_thread")]
+async fn too_short_args() {
     let args = RupassArgs {
         language: None,
+        // 不正
         password_length: Some(10),
         numbers: true,
         uppercase: true,
         lowercase: true,
         symbols: false,
     };
-    let bundle = mock_fluent_bundle();
-    let mut ui = MockUI::new(vec![]);
-
-    let result = generate_password_flow(&mut ui, &bundle, &args);
-    assert!(result.is_err());
-    match result {
-        Err(GenerationError::InvalidLength) => {}
-        other => panic!("Expected InvalidLength, got {:?}", other),
-    }
+    let mut ui = MockUI::default();
+    let err = generate_password_flow(&mut ui, &mock_bundle(), &args)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, GenerationError::InvalidLength));
 }
 
-/// 文字種を一切選ばず空集合 -> NoCharacterSetエラー
-#[test]
-fn test_no_charset() {
+#[tokio::test(flavor = "current_thread")]
+async fn no_charset() {
     let args = RupassArgs {
         language: None,
         password_length: Some(15),
@@ -187,53 +169,32 @@ fn test_no_charset() {
         lowercase: false,
         symbols: false,
     };
-    let bundle = mock_fluent_bundle();
-
-    // uppercase? -> n
-    // lowercase? -> n
-    // numbers? -> n
-    // use special chars? -> n
+    // uppercase? n / lowercase? n / numbers? n / symbols? n
     let mut ui = MockUI::new(vec!["n", "n", "n", "n"]);
-
-    let result = generate_password_flow(&mut ui, &bundle, &args);
-    assert!(matches!(result, Err(GenerationError::NoCharacterSet)));
+    let err = generate_password_flow(&mut ui, &mock_bundle(), &args)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, GenerationError::NoCharacterSet));
 }
 
-/// 特殊文字を指定 (対話入力で変更) し、強度判定に通るパスワードが生成されるか
-/// 実際のzxcvbnスコアが4に到達するかどうかはランダムの要素が大きいため、厳密には検証しない。
-#[test]
-fn test_generate_password_with_symbols() {
+#[tokio::test(flavor = "current_thread")]
+async fn custom_symbols() {
     let args = RupassArgs {
         language: None,
         password_length: Some(15),
         numbers: true,
         uppercase: true,
         lowercase: true,
-        symbols: false, // フラグはfalseでも後から"y"と答えると使える
+        symbols: false,
     };
-    let bundle = mock_fluent_bundle();
+    // symbols? y → change? y → enter custom set
+    let mut ui = MockUI::new(vec!["y", "y", "!?@#$%^&*()"]);
+    generate_password_flow(&mut ui, &mock_bundle(), &args)
+        .await
+        .unwrap();
 
-    // ユーザー入力
-    //  1) question_lowercase? => すでにtrueなので聞かれない (実際のコードでは聞かれない想定)
-    //  2) question_special_chars? => "y"
-    //  3) question_change_special_chars? => "y"
-    //  4) question_enter_special_chars? => "!?@#$%^&*()"
-    let mut ui = MockUI::new(vec!["!?@#$%^&*()", "y", "y"]);
-
-    let result = generate_password_flow(&mut ui, &bundle, &args);
-    assert!(
-        result.is_ok(),
-        "Should generate a password with custom symbols"
-    );
-
-    let generated_password = result.unwrap();
-    assert_eq!(generated_password.len(), 15);
-    // "!?@#$%^&*()" のいずれかが含まれているか(必須文字セット)
-    let contains_custom_symbol = generated_password
-        .chars()
-        .any(|c| "!?@#$%^&*()".contains(c));
-    assert!(
-        contains_custom_symbol,
-        "Generated password should contain custom symbols"
-    );
+    let out = ui.outputs_joined();
+    let pwd = extract_password(&out).expect("password not found");
+    assert_eq!(pwd.len(), 15);
+    assert!(pwd.chars().any(|c| "!?@#$%^&*()".contains(c)));
 }
