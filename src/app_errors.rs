@@ -15,24 +15,37 @@ limitations under the License. */
 use std::io;
 use thiserror::Error;
 
+/// # Overview
+/// パスワード生成プロセス中に発生しうるエラーを定義します。
 #[derive(Error, Debug)]
 pub enum GenerationError {
+    /// パスワード長が不正な場合に発生します。
     #[error("Invalid password length")]
     InvalidLength,
+    /// パスワード生成が指定された試行回数内に完了しなかった場合に発生します。
     #[error("Password generation failed")]
     GenerationFailed,
+    /// パスワード生成に使用する文字セットが何も選択されなかった場合に発生します。
     #[error("No character set selected")]
     NoCharacterSet,
+    /// 指定された翻訳キーに対応する翻訳が見つからなかった場合に発生します。
     #[error("Translation missing: {0}")]
     TranslationMissing(String),
+    /// 標準入出力操作中にエラーが発生した場合に発生します。
     #[error("IO error: {0}")]
     IoError(#[from] io::Error),
+    /// 指定された言語がサポートされていない場合に発生します。
     #[error("Unsupported language")]
     UnsupportedLanguage,
+    /// 翻訳リソースのパースに失敗した場合に発生します。
     #[error("Resource parse error")]
     ResourceParseError,
+    /// ユーザーとの対話がキャンセルされたか、無効な入力があった場合に発生します。
     #[error("Interaction cancelled or invalid input.")]
     InvalidInput,
 }
 
+/// # Overview
+/// アプリケーション全体で使用される [`Result`] 型のエイリアス。
+/// エラー型として [`GenerationError`] を使用します。
 pub type Result<T> = std::result::Result<T, GenerationError>;

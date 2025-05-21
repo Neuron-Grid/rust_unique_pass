@@ -15,9 +15,9 @@ limitations under the License. */
 use async_trait::async_trait;
 use fluent::{FluentBundle, FluentResource};
 use rust_unique_pass::{
+    RupassArgs,
     app_errors::{GenerationError, Result},
     generate_password_flow,
-    i18n::RupassArgs,
     user_interface::UserInterface,
 };
 use std::collections::VecDeque;

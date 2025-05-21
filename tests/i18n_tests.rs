@@ -15,8 +15,7 @@ limitations under the License. */
 use clap::Parser;
 use fluent::FluentArgs;
 use rust_unique_pass::{
-    i18n::{get_translation, RupassArgs},
-    initialize_bundle, GenerationError,
+    GenerationError, cli::RupassArgs, i18n::get_translation, initialize_bundle,
 };
 
 /// ショートエイリアス（-lや-pなど）のテスト
@@ -38,7 +37,7 @@ where
     I: IntoIterator<Item = T>,
     T: Into<std::ffi::OsString> + Clone,
 {
-    rust_unique_pass::i18n::RupassArgs::parse_from(iter)
+    rust_unique_pass::cli::RupassArgs::parse_from(iter)
 }
 
 /// サポートされない言語指定時のエラー

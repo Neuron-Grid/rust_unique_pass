@@ -16,6 +16,17 @@ use rust_unique_pass::{
     Result, StdioInterface, generate_password_flow, initialize_bundle, parse_args,
 };
 
+/// # Overview
+/// アプリケーションのエントリポイント。
+/// コマンドライン引数をパースし、国際化対応バンドルを初期化し、
+/// パスワード生成フローを実行します。
+///
+/// # Returns
+/// 処理が成功した場合、`Ok(())` を返します。
+///
+/// # Errors
+/// コマンドライン引数のパース、バンドルの初期化、またはパスワード生成フローの実行中に
+/// エラーが発生した場合、[`Result`] を返します。
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     let args = parse_args();
