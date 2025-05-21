@@ -13,7 +13,6 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 use crate::app_errors::{GenerationError, Result};
-use clap::Parser;
 use fluent::{FluentArgs, FluentBundle, FluentResource};
 use rust_embed::RustEmbed;
 use std::str::FromStr;
@@ -21,32 +20,71 @@ use unic_langid::LanguageIdentifier;
 
 const DEFAULT_LANGUAGE: &str = "eng";
 
+/// # Overview
+/// `RustEmbed` を使用して、`./translation` ディレクトリにある `.ftl` ファイルをバイナリに埋め込みます。
 #[derive(RustEmbed)]
 #[folder = "./translation"]
 #[include = "*.ftl"]
 struct Translations;
 
-/// 埋め込みリソースを取得し、UTF-8文字列として返す。
+/// # Overview
+/// 埋め込まれた翻訳リソースファイルの内容を UTF-8 文字列として取得します。
+///
+/// # Arguments
+/// * `filename`: 取得するリソースのファイル名 (例: "eng.ftl")。
+///
+/// # Returns
+/// リソースが見つかり、UTF-8 としてデコードできた場合、その内容を含む [`Option<String>`] を返します。
+/// 見つからないかデコードに失敗した場合、`None` を返します。
 fn get_embedded_resource(filename: &str) -> Option<String> {
     Translations::get(filename)
         .and_then(|data: rust_embed::EmbeddedFile| String::from_utf8(data.data.to_vec()).ok())
 }
 
-/// 言語コード文字列を `LanguageIdentifier` に変換する。
+/// # Overview
+/// 言語コード文字列を `fluent` クレートで使用される [`LanguageIdentifier`] に変換します。
+///
+/// # Arguments
+/// * `code`: 変換する言語コード文字列 (例: "eng", "jpn")。
+///
+/// # Returns
+/// 変換に成功した場合、対応する [`LanguageIdentifier`] を含む [`Result`] を返します。
+///
+/// # Errors
+/// 指定された言語コードが [`LanguageIdentifier`] として無効な場合、[`GenerationError::UnsupportedLanguage`] を含む [`Result`] を返します。
 fn map_to_fluent_code(code: &str) -> Result<LanguageIdentifier> {
     LanguageIdentifier::from_str(code).map_err(|_| GenerationError::UnsupportedLanguage)
 }
 
-/// コマンドライン引数から言語を解決し、文字列で返す。
-/// 引数で指定されていなければデフォルト言語 (eng) を返す。
-fn resolve_language(args: &RupassArgs) -> String {
+/// # Overview
+/// コマンドライン引数から指定された言語コードを解決します。
+/// 引数で言語が指定されていない場合は、デフォルト言語コード ("eng") を返します。
+///
+/// # Arguments
+/// * `args`: コマンドライン引数を格納した [`RupassArgs`] 構造体への参照。
+///
+/// # Returns
+/// 解決された言語コードを含む [`String`] を返します。
+fn resolve_language(args: &crate::cli::RupassArgs) -> String {
     args.language
         .as_ref()
         .map(|l| l.to_string())
         .unwrap_or_else(|| DEFAULT_LANGUAGE.to_string())
 }
 
-/// 指定された言語文字列をもとに FluentBundle を生成して返す。
+/// # Overview
+/// 指定された言語コードに対応する FluentBundle をロードします。
+/// 埋め込まれた `.ftl` リソースを読み込み、パースしてバンドルに追加します。
+///
+/// # Arguments
+/// * `language`: ロードするバンドルの言語コード文字列。
+///
+/// # Returns
+/// ロードされた [`FluentBundle<FluentResource>`] を含む [`Result`] を返します。
+///
+/// # Errors
+/// 指定された言語のリソースが見つからない場合、[`GenerationError::UnsupportedLanguage`] を含む [`Result`] を返します。
+/// リソースのパースに失敗した場合、[`GenerationError::ResourceParseError`] を含む [`Result`] を返します。
 fn load_fluent_bundle(language: &str) -> Result<FluentBundle<FluentResource>> {
     let langid = map_to_fluent_code(language)?;
     let resource_filename = format!("{}.ftl", langid);
@@ -64,13 +102,40 @@ fn load_fluent_bundle(language: &str) -> Result<FluentBundle<FluentResource>> {
     Ok(bundle)
 }
 
-/// コマンドライン引数から言語設定を取得し、それに対応する FluentBundle を初期化する。
-pub fn initialize_bundle(args: &RupassArgs) -> Result<FluentBundle<FluentResource>> {
+/// # Overview
+/// コマンドライン引数に基づいて、アプリケーションで使用する [`FluentBundle`] を初期化します。
+///
+/// # Arguments
+/// * `args`: コマンドライン引数を格納した [`RupassArgs`] 構造体への参照。
+///
+/// # Returns
+/// 初期化された [`FluentBundle<FluentResource>`] を含む [`Result`] を返します。
+///
+/// # Errors
+/// 言語の解決またはバンドルのロードに失敗した場合、関連する [`GenerationError`] を含む [`Result`] を返します。
+#[doc(alias = "i18n")]
+#[doc(alias = "internationalization")]
+#[doc(alias = "localization")]
+pub fn initialize_bundle(args: &crate::cli::RupassArgs) -> Result<FluentBundle<FluentResource>> {
     let language = resolve_language(args);
     load_fluent_bundle(&language)
 }
 
-/// FluentBundle から指定キーのメッセージを取得し、引数があれば適用して返す。
+/// # Overview
+/// 指定されたキーに対応する翻訳メッセージを [`FluentBundle`] から取得し、必要に応じて引数を適用してフォーマットします。
+///
+/// # Arguments
+/// * `bundle`: 翻訳メッセージを取得する [`FluentBundle`] への参照。
+/// * `key`: 取得する翻訳メッセージのキー。
+/// * `args`: 翻訳メッセージに適用する引数を含む [`FluentArgs`] へのオプションの参照。
+///
+/// # Returns
+/// フォーマットされた翻訳メッセージ文字列を含む [`Result<String>`] を返します。
+///
+/// # Errors
+/// 指定されたキーに対応するメッセージまたは値がバンドルに見つからない場合、[`GenerationError::TranslationMissing`] を含む [`Result`] を返します。
+#[doc(alias = "translate")]
+#[doc(alias = "get message")]
 pub fn get_translation<'bundle>(
     bundle: &'bundle FluentBundle<FluentResource>,
     key: &str,
@@ -86,68 +151,4 @@ pub fn get_translation<'bundle>(
 
     let formatted_value = bundle.format_pattern(value, args, &mut Vec::new());
     Ok(formatted_value.trim_matches('"').to_owned())
-}
-
-#[derive(Parser, Debug, PartialEq)]
-pub struct RupassArgs {
-    // 設定言語を指定する
-    #[clap(
-        short = 'l',
-        long = "language",
-        value_name = "LANGUAGE",
-        help = "Specifies the language for user prompts and messages.\
-            \nSpecify the language code as defined by ISO639-3.\
-            \nSupported languages: Japanese, English, and German.\
-            \nDefault language: English"
-    )]
-    pub language: Option<String>,
-
-    // パスワード長を指定する
-    #[clap(
-        short = 'p',
-        long = "password-length",
-        value_name = "PASSWORD_LENGTH",
-        help = "Specify the length of the password. \
-            \nIf omitted, a default length is used."
-    )]
-    pub password_length: Option<usize>,
-
-    // 数字を含むかどうかのフラグ
-    #[clap(
-        short = 'n',
-        long = "numbers",
-        help = "Include numbers in the password."
-    )]
-    pub numbers: bool,
-
-    // 大文字を含むかどうかのフラグ
-    #[clap(
-        short = 'u',
-        long = "uppercase",
-        help = "Include uppercase letters in the password."
-    )]
-    pub uppercase: bool,
-
-    // 小文字を含むかどうかのフラグ
-    #[clap(
-        short = 'w',
-        long = "lowercase",
-        help = "Include lowercase letters in the password."
-    )]
-    pub lowercase: bool,
-
-    // 特殊記号を含むかどうかのフラグ
-    #[clap(
-        short = 's',
-        long = "symbols",
-        help = "Include symbols in passwords.\
-        \nBy default, the symbols ~!@#$%^&*_-+=(){}[]:;<>,.?/ are used.\
-        \nYou can change which special symbols are used."
-    )]
-    pub symbols: bool,
-}
-
-/// コマンドライン引数をパースしてRupassArgsを生成する。
-pub fn parse_args() -> RupassArgs {
-    RupassArgs::parse()
 }
