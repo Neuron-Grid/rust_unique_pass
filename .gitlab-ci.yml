@@ -8,6 +8,7 @@ default:
     - cargo --version
 
 stages:
+  - lint
   - test
   - deploy
 
@@ -21,6 +22,14 @@ test-job:
     - cargo check
     - cargo test
     - cargo publish --dry-run
+  allow_failure: false
+
+lint-job:
+  stage: lint
+  script:
+    - echo "Start execution of lint-job"
+    - rustup component add clippy
+    - cargo clippy --all-targets --all-features -- -D warnings
   allow_failure: false
 
 deploy-job:
