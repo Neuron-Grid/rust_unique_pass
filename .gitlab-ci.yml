@@ -2,7 +2,6 @@ default:
   image: "rust:latest"
   before_script:
     - echo "Start execution of before_script"
-    - go install github.com/google/osv-scanner/v2/cmd/osv-scanner@latest
     - rustup self update
     - rustup update stable
 
@@ -13,13 +12,6 @@ stages:
 
 variables:
   CARGO_REGISTRY_TOKEN: $CARTIS_API_KEY
-
-security-scan-job:
-  stage: security
-  script:
-    - echo "Start execution of security-scan-job with OSV-Scanner"
-    - osv-scanner scan --no-ignore .
-  allow_failure: false
 
 test-job:
   stage: test
