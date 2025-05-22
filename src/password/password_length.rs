@@ -12,9 +12,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
-use crate::app_errors::{GenerationError, Result};
 use crate::cli::RupassArgs;
-use crate::user_interface::UserInterface;
+use crate::cli::UserInterface;
+use crate::core::app_errors::{GenerationError, Result};
 use fluent::FluentBundle;
 use fluent::FluentResource;
 use futures::FutureExt;
@@ -48,13 +48,13 @@ pub async fn get_password_length(
         return Ok(len);
     }
     // 翻訳済みメッセージを先に生成
-    let prompt = crate::utils::fallback_translation(
+    let prompt = crate::core::utils::fallback_translation(
         bundle,
         "question_password_length",
         "Enter password length:",
         None,
     );
-    let too_short_msg = Arc::new(crate::utils::fallback_translation(
+    let too_short_msg = Arc::new(crate::core::utils::fallback_translation(
         bundle,
         "error_password_too_short",
         "Password is too short.",
@@ -62,7 +62,7 @@ pub async fn get_password_length(
     ));
 
     // 入力ループ
-    let len = crate::utils::prompt_loop(ui, &prompt, |s| parse_length_input(s), {
+    let len = crate::core::utils::prompt_loop(ui, &prompt, parse_length_input, {
         let msg = too_short_msg.clone();
         move |ui, _| {
             let msg = msg.clone();

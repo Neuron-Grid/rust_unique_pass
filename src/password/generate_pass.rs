@@ -12,13 +12,13 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
-use crate::app_errors::{GenerationError, Result};
-use crate::character_set::assemble_character_set;
 use crate::cli::RupassArgs;
-use crate::password_generation::produce_secure_password;
-use crate::password_length::get_password_length;
-use crate::user_interface::UserInterface;
-use crate::utils::fallback_translation;
+use crate::cli::UserInterface;
+use crate::core::app_errors::{GenerationError, Result};
+use crate::core::utils::fallback_translation;
+use crate::password::character_set::assemble_character_set;
+use crate::password::password_generation::produce_secure_password;
+use crate::password::password_length::get_password_length;
 use fluent::{FluentBundle, FluentResource};
 use tokio::task;
 

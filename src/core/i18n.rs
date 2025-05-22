@@ -12,7 +12,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
-use crate::app_errors::{GenerationError, Result};
+use crate::cli::RupassArgs;
+use crate::core::app_errors::{GenerationError, Result};
 use fluent::{FluentArgs, FluentBundle, FluentResource};
 use rust_embed::RustEmbed;
 use std::str::FromStr;
@@ -65,7 +66,7 @@ fn map_to_fluent_code(code: &str) -> Result<LanguageIdentifier> {
 ///
 /// # Returns
 /// 解決された言語コードを含む [`String`] を返します。
-fn resolve_language(args: &crate::cli::RupassArgs) -> String {
+fn resolve_language(args: &RupassArgs) -> String {
     args.language
         .as_ref()
         .map(|l| l.to_string())
@@ -116,7 +117,7 @@ fn load_fluent_bundle(language: &str) -> Result<FluentBundle<FluentResource>> {
 #[doc(alias = "i18n")]
 #[doc(alias = "internationalization")]
 #[doc(alias = "localization")]
-pub fn initialize_bundle(args: &crate::cli::RupassArgs) -> Result<FluentBundle<FluentResource>> {
+pub fn initialize_bundle(args: &RupassArgs) -> Result<FluentBundle<FluentResource>> {
     let language = resolve_language(args);
     load_fluent_bundle(&language)
 }

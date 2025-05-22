@@ -12,9 +12,9 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
-use crate::app_errors::{GenerationError, Result};
 use crate::cli::RupassArgs;
-use crate::user_interface::UserInterface;
+use crate::cli::UserInterface;
+use crate::core::app_errors::{GenerationError, Result};
 use fluent::{FluentArgs, FluentBundle, FluentResource};
 
 const DEFAULT_SPECIAL_CHARS: &str = "~!@#$%^&*_-+=(){}[]:;<>,.?/";
@@ -50,7 +50,7 @@ pub async fn assemble_character_set(
     }
 
     if charset.is_empty() {
-        let msg = crate::utils::fallback_translation(
+        let msg = crate::core::utils::fallback_translation(
             bundle,
             "error_no_charset_selected",
             "No valid character set was selected.",
@@ -121,8 +121,8 @@ async fn ask_user_for_additional_sets(
         if req.iter().any(|r| r == chars) {
             continue;
         }
-        let question = crate::utils::fallback_translation(bundle, key, "", None);
-        if crate::utils::ask_user_yes_no(ui, bundle, &question).await? {
+        let question = crate::core::utils::fallback_translation(bundle, key, "", None);
+        if crate::core::utils::ask_user_yes_no(ui, bundle, &question).await? {
             acc.push_str(chars);
             req.push(chars.to_owned());
         }
@@ -157,7 +157,7 @@ async fn handle_special_characters(
     let mut fargs = FluentArgs::new();
     fargs.set("specialChars", DEFAULT_SPECIAL_CHARS);
 
-    let def_msg = crate::utils::fallback_translation(
+    let def_msg = crate::core::utils::fallback_translation(
         bundle,
         "default_special_chars_message",
         &format!("Default special chars: {DEFAULT_SPECIAL_CHARS}"),
@@ -165,13 +165,13 @@ async fn handle_special_characters(
     );
     ui.print(&def_msg).await?;
 
-    let q = crate::utils::fallback_translation(
+    let q = crate::core::utils::fallback_translation(
         bundle,
         "question_special_chars",
         "Use special characters?",
         None,
     );
-    if crate::utils::ask_user_yes_no(ui, bundle, &q).await? {
+    if crate::core::utils::ask_user_yes_no(ui, bundle, &q).await? {
         ask_special_chars(ui, bundle).await
     } else {
         Ok(String::new())
@@ -194,15 +194,15 @@ async fn ask_special_chars(
     ui: &mut dyn UserInterface,
     bundle: &FluentBundle<FluentResource>,
 ) -> Result<String> {
-    let change_q = crate::utils::fallback_translation(
+    let change_q = crate::core::utils::fallback_translation(
         bundle,
         "question_change_special_chars",
         "Change the default special chars?",
         None,
     );
 
-    if crate::utils::ask_user_yes_no(ui, bundle, &change_q).await? {
-        let enter_msg = crate::utils::fallback_translation(
+    if crate::core::utils::ask_user_yes_no(ui, bundle, &change_q).await? {
+        let enter_msg = crate::core::utils::fallback_translation(
             bundle,
             "question_enter_special_chars",
             "Enter special chars:",

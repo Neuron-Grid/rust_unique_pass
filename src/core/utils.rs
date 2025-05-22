@@ -12,8 +12,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
-use crate::app_errors::Result;
-use crate::user_interface::UserInterface;
+use crate::cli::UserInterface;
+use crate::core::app_errors::{GenerationError, Result};
 use fluent::{FluentArgs, FluentBundle, FluentResource};
 use futures::{FutureExt, future::LocalBoxFuture};
 use std::sync::Arc;
@@ -38,7 +38,7 @@ pub fn fallback_translation(
     fallback: &str,
     args: Option<&FluentArgs>,
 ) -> String {
-    crate::i18n::get_translation(bundle, key, args).unwrap_or_else(|_| fallback.to_owned())
+    crate::core::i18n::get_translation(bundle, key, args).unwrap_or_else(|_| fallback.to_owned())
 }
 
 /// # Overview
@@ -118,7 +118,7 @@ pub async fn ask_user_yes_no(
         None,
     ));
 
-    let ans = prompt_loop(ui, message, |s| parse_yes_no_input(s), {
+    let ans = prompt_loop(ui, message, parse_yes_no_input, {
         let msg = invalid.clone();
         move |ui, _| {
             let msg = msg.clone();
@@ -146,10 +146,10 @@ pub async fn ask_user_yes_no(
 /// 有効な yes/no 入力でない場合、エラー (`Err(())`) を返します。
 #[doc(alias = "parse")]
 #[doc(alias = "yes no")]
-pub fn parse_yes_no_input(s: &str) -> std::result::Result<bool, ()> {
+pub fn parse_yes_no_input(s: &str) -> std::result::Result<bool, GenerationError> {
     match s.trim().to_lowercase().as_str() {
         "y" | "yes" | "はい" | "ja" => Ok(true),
         "n" | "no" | "いいえ" | "nein" => Ok(false),
-        _ => Err(()),
+        _ => Err(GenerationError::InvalidInput),
     }
 }

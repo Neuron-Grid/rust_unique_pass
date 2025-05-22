@@ -12,8 +12,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
-use crate::app_errors::{GenerationError, Result};
-use crate::password_length::validate_password_length;
+use crate::core::app_errors::{GenerationError, Result};
+use crate::password::password_length::validate_password_length;
 use rand::prelude::IndexedRandom;
 use rand::prelude::SliceRandom;
 use zeroize::Zeroizing;
