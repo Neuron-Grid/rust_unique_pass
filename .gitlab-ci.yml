@@ -8,6 +8,8 @@ default:
     - rustup component add clippy
 
 stages:
+  - lint
+  - security
   - test
   - deploy
 
