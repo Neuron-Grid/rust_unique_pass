@@ -8,6 +8,7 @@ default:
     - cargo --version
 
 stages:
+  - lint
   - test
   - lint
   - security
@@ -23,21 +24,6 @@ test-job:
     - cargo check
     - cargo test
     - cargo publish --dry-run
-  allow_failure: false
-
-lint-job:
-  stage: lint
-  script:
-    - echo "Start execution of lint-job"
-    - cargo clippy --all-targets --all-features -- -D warnings
-  allow_failure: false
-
-security-scan-job:
-  stage: security
-  script:
-    - echo "Start execution of security-scan-job with OSV-Scanner"
-    - cargo install cargo-osv
-    - cargo osv
   allow_failure: false
 
 deploy-job:
