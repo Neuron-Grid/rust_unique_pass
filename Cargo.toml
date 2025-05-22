@@ -26,6 +26,9 @@ futures = { version = "0.3.31", default-features = false, features = ["alloc"] }
 zeroize = "1.8.1"
 zeroize_derive = { version = "1.4.2", optional = true }
 
+[dev-dependencies]
+cargo-audit = "0.21.2"
+
 [lib]
 name = "rust_unique_pass"
 path = "src/lib.rs"
