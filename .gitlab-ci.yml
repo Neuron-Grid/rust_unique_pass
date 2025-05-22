@@ -6,10 +6,7 @@ default:
     - rustup update stable
 
 stages:
-  - security
   - test
-  - lint
-  - security
   - deploy
 
 variables:
