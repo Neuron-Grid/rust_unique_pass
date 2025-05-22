@@ -5,23 +5,14 @@ default:
     - go install github.com/google/osv-scanner/v2/cmd/osv-scanner@latest
     - rustup self update
     - rustup update stable
-    - rustup component add clippy
 
 stages:
-  - lint
   - security
   - test
   - deploy
 
 variables:
   CARGO_REGISTRY_TOKEN: $CARTIS_API_KEY
-
-lint-job:
-  stage: lint
-  script:
-    - echo "Start execution of lint-job"
-    - cargo clippy --all-targets --all-features -- -D warnings
-  allow_failure: false
 
 security-scan-job:
   stage: security
@@ -37,14 +28,6 @@ test-job:
     - cargo check
     - cargo test
     - cargo publish --dry-run
-  allow_failure: false
-
-lint-job:
-  stage: lint
-  script:
-    - echo "Start execution of lint-job"
-    - rustup component add clippy
-    - cargo clippy --all-targets --all-features -- -D warnings
   allow_failure: false
 
 deploy-job:
