@@ -4,11 +4,9 @@ default:
     - echo "Start execution of before_script"
     - rustup self update
     - rustup update stable
-    - rustc --version
-    - cargo --version
 
 stages:
-  - lint
+  - security
   - test
   - lint
   - security
