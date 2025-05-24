@@ -60,6 +60,14 @@ pub async fn assemble_character_set(
         return Err(GenerationError::NoCharacterSet);
     }
 
+    // 文字セットの重複除去と最適化
+    let charset = remove_duplicate_chars(&charset);
+    let req_sets = req_sets
+        .into_iter()
+        .map(|s| remove_duplicate_chars(&s))
+        .filter(|s| !s.is_empty())
+        .collect();
+
     Ok((charset, req_sets))
 }
 
@@ -86,6 +94,21 @@ fn assemble_flag_based_charset(args: &RupassArgs) -> (String, Vec<String>) {
         }
         (acc, req)
     })
+}
+
+/// # Overview
+/// 文字列から重複文字を除去し、効率的な文字セットを生成します。
+/// パスワード生成処理の最適化に寄与します。
+///
+/// # Arguments
+/// * `input`: 重複除去対象の文字列
+///
+/// # Returns
+/// 重複が除去された文字列
+fn remove_duplicate_chars(input: &str) -> String {
+    use std::collections::HashSet;
+    let mut seen = HashSet::new();
+    input.chars().filter(|&c| seen.insert(c)).collect()
 }
 
 /// # Overview
@@ -209,7 +232,19 @@ async fn ask_special_chars(
             None,
         );
         let inp = ui.prompt(&enter_msg).await?;
-        Ok(inp)
+        // ユーザー入力の特殊文字もバリデーション
+        if inp.trim().is_empty() {
+            let fallback_msg = crate::core::utils::fallback_translation(
+                bundle,
+                "warning_empty_special_chars",
+                "Empty input received, using default special characters.",
+                None,
+            );
+            ui.print(&fallback_msg).await?;
+            Ok(DEFAULT_SPECIAL_CHARS.to_owned())
+        } else {
+            Ok(inp)
+        }
     } else {
         Ok(DEFAULT_SPECIAL_CHARS.to_owned())
     }

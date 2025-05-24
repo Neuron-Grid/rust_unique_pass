@@ -57,14 +57,11 @@ pub async fn generate_password_flow(
     let all_vec: Vec<char> = all_chars.chars().collect();
     let req_vec: Vec<Vec<char>> = req_sets.iter().map(|s| s.chars().collect()).collect();
 
-    // heavy task => blocking thread-pool
     let pwd = task::spawn_blocking(move || produce_secure_password(&all_vec, length, &req_vec))
         .await
-        .map_err(|_| GenerationError::GenerationFailed)??;
-
-    // `Zeroizing<String>` → &str
-    // 明示的にデリファレンスして表示
-    ui.print(&format!("{gen_msg}\n{}\n", pwd.as_str())).await?;
+        .map_err(|_join_err| GenerationError::GenerationFailed)??;
+    let output_msg = format!("{gen_msg}\n{}\n", pwd.as_str());
+    ui.print(&output_msg).await?;
 
     // スコープ離脱で自動zeroize
     drop(pwd);
