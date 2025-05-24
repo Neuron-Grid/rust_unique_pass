@@ -18,7 +18,6 @@ use crate::core::app_errors::{GenerationError, Result};
 use fluent::FluentBundle;
 use fluent::FluentResource;
 use futures::FutureExt;
-use std::sync::Arc;
 
 /// # Overview
 /// パスワード長を取得し、その値が有効であるかを検証します。
@@ -54,22 +53,18 @@ pub async fn get_password_length(
         "Enter password length:",
         None,
     );
-    let too_short_msg = Arc::new(crate::core::utils::fallback_translation(
+    let too_short_msg = crate::core::utils::fallback_translation(
         bundle,
         "error_password_too_short",
         "Password is too short.",
         None,
-    ));
+    );
 
-    // 入力ループ
+    // 入力ループ - エラーハンドリングを堅牢化
     let len = crate::core::utils::prompt_loop(ui, &prompt, parse_length_input, {
-        let msg = too_short_msg.clone();
         move |ui, _| {
-            let msg = msg.clone();
-            async move {
-                ui.print(&msg).await.ok();
-            }
-            .boxed_local()
+            let msg = too_short_msg.clone();
+            async move { if let Err(_e) = ui.print(&msg).await {} }.boxed_local()
         }
     })
     .await;

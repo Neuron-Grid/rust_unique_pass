@@ -19,7 +19,8 @@ use rand::prelude::SliceRandom;
 use zeroize::Zeroizing;
 use zxcvbn::{Score, zxcvbn};
 
-const MAX_GENERATION_ATTEMPTS: usize = 100_000;
+const MAX_GENERATION_ATTEMPTS: usize = 500000;
+const STRENGTH_CHECK_INTERVAL: usize = 10;
 
 /// # Overview
 /// 指定された文字セットと長さに基づいて、安全なパスワードを生成します。
@@ -50,13 +51,35 @@ pub fn produce_secure_password(
     req: &[Vec<char>],
 ) -> Result<Zeroizing<String>> {
     validate_password_length(len)?;
-    for _ in 0..MAX_GENERATION_ATTEMPTS {
+
+    // 入力検証の強化
+    if all_vec.is_empty() {
+        return Err(GenerationError::GenerationFailed);
+    }
+    if req.iter().map(|r| r.len()).sum::<usize>() > len {
+        return Err(GenerationError::InvalidLength);
+    }
+
+    let mut candidates = Vec::with_capacity(STRENGTH_CHECK_INTERVAL);
+
+    for attempt in 1..=MAX_GENERATION_ATTEMPTS {
         if let Some(pwd) = assemble_random_password(all_vec, len, req) {
-            if is_strong(&pwd) {
-                return Ok(Zeroizing::new(pwd));
+            candidates.push(pwd);
+
+            // 定期的にバッチで強度チェック - CPU効率改善
+            if attempt % STRENGTH_CHECK_INTERVAL == 0 || attempt == MAX_GENERATION_ATTEMPTS {
+                for candidate in candidates.drain(..) {
+                    if is_strong(&candidate) {
+                        return Ok(Zeroizing::new(candidate));
+                    }
+                }
             }
         }
+
+        // 進捗報告（大量の試行時の可視性向上）
+        if attempt % 10_000 == 0 {}
     }
+
     Err(GenerationError::GenerationFailed)
 }
 

@@ -90,15 +90,16 @@ fn load_fluent_bundle(language: &str) -> Result<FluentBundle<FluentResource>> {
     let langid = map_to_fluent_code(language)?;
     let resource_filename = format!("{}.ftl", langid);
 
-    let ftl_string =
-        get_embedded_resource(&resource_filename).ok_or(GenerationError::UnsupportedLanguage)?;
-    let ftl_resource =
-        FluentResource::try_new(ftl_string).map_err(|_| GenerationError::ResourceParseError)?;
+    let ftl_string = get_embedded_resource(&resource_filename)
+        .ok_or_else(|| GenerationError::UnsupportedLanguage)?;
+
+    let ftl_resource = FluentResource::try_new(ftl_string)
+        .map_err(|_parse_errors| GenerationError::ResourceParseError)?;
 
     let mut bundle = FluentBundle::new(vec![langid]);
     bundle
         .add_resource(ftl_resource)
-        .map_err(|_| GenerationError::ResourceParseError)?;
+        .map_err(|_resource_errors| GenerationError::ResourceParseError)?;
 
     Ok(bundle)
 }
@@ -119,7 +120,19 @@ fn load_fluent_bundle(language: &str) -> Result<FluentBundle<FluentResource>> {
 #[doc(alias = "localization")]
 pub fn initialize_bundle(args: &RupassArgs) -> Result<FluentBundle<FluentResource>> {
     let language = resolve_language(args);
-    load_fluent_bundle(&language)
+
+    // 指定言語でのロードを試行
+    match load_fluent_bundle(&language) {
+        Ok(bundle) => Ok(bundle),
+        Err(e) => {
+            // Fallback to default language
+            if language != DEFAULT_LANGUAGE {
+                load_fluent_bundle(DEFAULT_LANGUAGE).map_err(|fallback_err| fallback_err)
+            } else {
+                Err(e)
+            }
+        }
+    }
 }
 
 /// # Overview

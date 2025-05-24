@@ -16,7 +16,6 @@ use crate::cli::UserInterface;
 use crate::core::app_errors::{GenerationError, Result};
 use fluent::{FluentArgs, FluentBundle, FluentResource};
 use futures::{FutureExt, future::LocalBoxFuture};
-use std::sync::Arc;
 
 /// # Overview
 /// 指定されたキーに対応する翻訳メッセージを [`FluentBundle`] から取得します。
@@ -44,6 +43,7 @@ pub fn fallback_translation(
 /// # Overview
 /// ユーザーからの有効な入力を繰り返しプロンプト表示して取得するための非同期ループ。
 /// 入力は指定されたパース関数によって検証され、無効な場合はエラーハンドラが実行されます。
+/// 連続した入力エラーを制限し、システムの安定性を確保します。
 ///
 /// # Arguments
 /// * `ui`: ユーザーとの対話に使用する [`UserInterface`] トレイトオブジェクト。
@@ -59,6 +59,9 @@ pub fn fallback_translation(
 /// * `E`: パース関数が返すエラーの型。
 /// * `F`: パース関数の型。
 /// * `H`: エラーハンドラクロージャの型。
+///
+/// # Panics
+/// 連続した入力読み取りエラーが最大再試行回数(10回)を超えた場合にパニックします。
 #[doc(alias = "prompt")]
 #[doc(alias = "input loop")]
 pub async fn prompt_loop<T, E, F, H>(
@@ -71,14 +74,34 @@ where
     F: Fn(&str) -> std::result::Result<T, E>,
     H: for<'a> FnMut(&'a mut dyn UserInterface, &'a E) -> LocalBoxFuture<'a, ()>,
 {
+    const MAX_INPUT_FAILURES: usize = 10;
+    let mut consecutive_failures = 0;
+
     loop {
         let input = match ui.prompt(prompt).await {
-            Ok(s) => s,
-            Err(_) => {
-                ui.print("Couldn't read input. Retrying...").await.ok();
+            Ok(s) => {
+                consecutive_failures = 0; // Reset counter on success
+                s
+            }
+            Err(e) => {
+                consecutive_failures += 1;
+                let retry_msg = format!(
+                    "Failed to read input (attempt {}/{}): {}",
+                    consecutive_failures, MAX_INPUT_FAILURES, e
+                );
+
+                if let Err(_e) = ui.print(&retry_msg).await {}
+
+                if consecutive_failures >= MAX_INPUT_FAILURES {
+                    panic!(
+                        "Consecutive input errors exceeded maximum attempts ({}). Terminating system.",
+                        MAX_INPUT_FAILURES
+                    );
+                }
                 continue;
             }
         };
+
         match parse_fn(&input) {
             Ok(v) => break v,
             Err(e) => on_err(ui, &e).await,
@@ -111,17 +134,16 @@ pub async fn ask_user_yes_no(
         return Ok(false);
     }
 
-    let invalid = Arc::new(fallback_translation(
+    let invalid_msg = fallback_translation(
         bundle,
         "error_invalid_input",
         "Invalid input. Please enter yes or no.",
         None,
-    ));
+    );
 
     let ans = prompt_loop(ui, message, parse_yes_no_input, {
-        let msg = invalid.clone();
-        move |ui, _| {
-            let msg = msg.clone();
+        move |ui, _error| {
+            let msg = invalid_msg.clone();
             async move {
                 ui.print(&msg).await.ok();
             }
