@@ -23,9 +23,7 @@ const MAX_GENERATION_ATTEMPTS: usize = 500000;
 const STRENGTH_CHECK_INTERVAL: usize = 10;
 
 /// # Overview
-/// 指定された文字セットと長さに基づいて、安全なパスワードを生成します。
-/// 必須文字セットからの文字を必ず含み、生成されたパスワードが十分に強力であるかを確認します。
-/// 指定された試行回数内に安全なパスワードが生成できない場合はエラーを返します。
+/// 指定された文字セットと長さに基づいて、安全なパスワードを生成します（同期版）。
 ///
 /// # Arguments
 /// * `all_vec`: パスワードに使用可能な全ての文字を含むスライス。
@@ -34,18 +32,10 @@ const STRENGTH_CHECK_INTERVAL: usize = 10;
 ///
 /// # Returns
 /// 安全なパスワードが生成された場合、[`Zeroizing<String>`] でラップされたパスワードを返します。
-///
-/// # Errors
-/// パスワード長が不正な場合、[`GenerationError::InvalidPasswordLength`] を返します。
-/// 指定された試行回数内に安全なパスワードが生成できなかった場合、[`GenerationError::GenerationFailed`] を返します。
-///
-/// # Notes
-/// この関数は同期的に実行されるため、非同期コンテキストで呼び出す場合はブロッキングスレッドプールを使用してください。
-/// 生成されたパスワードはメモリから安全に消去するために [`Zeroizing`] でラップされています。
 #[doc(alias = "generate")]
 #[doc(alias = "password")]
 #[doc(alias = "secure")]
-pub fn produce_secure_password(
+pub async fn produce_secure_password(
     all_vec: &[char],
     len: usize,
     req: &[Vec<char>],
@@ -56,14 +46,14 @@ pub fn produce_secure_password(
     if all_vec.is_empty() {
         return Err(GenerationError::GenerationFailed);
     }
-    if req.iter().map(|r| r.len()).sum::<usize>() > len {
+    if req.len() > len {
         return Err(GenerationError::InvalidLength);
     }
 
     let mut candidates = Vec::with_capacity(STRENGTH_CHECK_INTERVAL);
 
     for attempt in 1..=MAX_GENERATION_ATTEMPTS {
-        if let Some(pwd) = assemble_random_password(all_vec, len, req) {
+        if let Some(pwd) = assemble_random_password(all_vec, len, req).await {
             candidates.push(pwd);
 
             // 定期的にバッチで強度チェック - CPU効率改善
@@ -83,18 +73,11 @@ pub fn produce_secure_password(
     Err(GenerationError::GenerationFailed)
 }
 
-/// # Overview
-/// 指定された文字セットと長さ、必須文字セットに基づいてランダムなパスワードを組み立てます。
-///
-/// # Arguments
-/// * `all_vec`: パスワードに使用可能な全ての文字を含むスライス。
-/// * `len`: 組み立てるパスワードの長さ。
-/// * `req`: パスワードに最低1文字含める必要がある文字セットのリストを含むスライス。
-///
-/// # Returns
-/// 組み立てられたパスワードを含む [`Option<String>`] を返します。
-/// 使用可能な文字セットが空の場合、または必須文字セットの数がパスワード長より大きい場合は `None` を返します。
-pub fn assemble_random_password(all_vec: &[char], len: usize, req: &[Vec<char>]) -> Option<String> {
+pub async fn assemble_random_password(
+    all_vec: &[char],
+    len: usize,
+    req: &[Vec<char>],
+) -> Option<String> {
     if all_vec.is_empty() {
         return None;
     }

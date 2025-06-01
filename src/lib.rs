@@ -14,6 +14,7 @@ limitations under the License. */
 
 pub mod cli;
 pub mod core;
+pub mod crypto;
 pub mod password;
 
 /// コマンドライン引数の解析に関連する機能を提供します。

@@ -14,13 +14,12 @@ limitations under the License. */
 
 use crate::cli::RupassArgs;
 use crate::cli::UserInterface;
-use crate::core::app_errors::{GenerationError, Result};
+use crate::core::app_errors::Result;
 use crate::core::utils::fallback_translation;
 use crate::password::character_set::assemble_character_set;
 use crate::password::password_generation::produce_secure_password;
 use crate::password::password_length::get_password_length;
 use fluent::{FluentBundle, FluentResource};
-use tokio::task;
 
 #[doc(alias = "generate")]
 /// # Overview
@@ -57,9 +56,7 @@ pub async fn generate_password_flow(
     let all_vec: Vec<char> = all_chars.chars().collect();
     let req_vec: Vec<Vec<char>> = req_sets.iter().map(|s| s.chars().collect()).collect();
 
-    let pwd = task::spawn_blocking(move || produce_secure_password(&all_vec, length, &req_vec))
-        .await
-        .map_err(|_join_err| GenerationError::GenerationFailed)??;
+    let pwd = produce_secure_password(&all_vec, length, &req_vec).await?;
     let output_msg = format!("{gen_msg}\n{}\n", pwd.as_str());
     ui.print(&output_msg).await?;
 
