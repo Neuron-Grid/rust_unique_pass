@@ -1,5 +1,3 @@
-// src/crypto/rng.rs のテストを分離
-
 use rust_unique_pass::crypto::rng::*;
 use tokio;
 
@@ -24,6 +22,6 @@ async fn test_generate_bytes() {
 #[tokio::test]
 async fn test_reseed() {
     let rng = SecureRng::new().unwrap();
-    let result = rng.reseed().await;
+    let result = rng.reseed();
     assert!(result.is_ok());
 }

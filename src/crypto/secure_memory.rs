@@ -27,7 +27,7 @@ use super::{CryptoError, CryptoResult};
 use std::alloc::{Layout, alloc, dealloc};
 use std::pin::Pin;
 use std::ptr;
-use zeroize::{Zeroize, Zeroizing};
+use zeroize::Zeroize;
 
 /// プラットフォーム固有のメモリ保護機能を提供
 struct MemoryProtector;
@@ -92,7 +92,8 @@ impl MemoryProtector {
         }
     }
 
-    /// 追加のメモリ保護（コアダンプ除外など）
+    /// 追加のメモリ保護
+    /// コアダンプ除外など
     #[inline]
     fn additional_protection(_ptr: *mut u8, _size: usize) -> Result<(), String> {
         #[cfg(all(unix, target_os = "linux"))]
@@ -154,7 +155,8 @@ impl<T> SecureMemory<T> {
                 )));
             }
 
-            // 追加の保護（コアダンプ除外など）
+            // 追加の保護
+            // コアダンプ除外など
             if let Err(e) = MemoryProtector::additional_protection(ptr as *mut u8, layout.size()) {
                 // 追加保護の失敗は警告レベル、続行可能
                 eprintln!("Warning: Additional memory protection failed: {}", e);
@@ -303,46 +305,6 @@ impl std::fmt::Debug for SecureString {
     }
 }
 
-/// セキュアなバッファ
-/// 一時的なデータ保存用のセキュアバッファを提供します。
-pub struct SecureBuffer {
-    memory: Zeroizing<Vec<u8>>,
-}
-
-impl SecureBuffer {
-    /// 新しいセキュアバッファを作成
-    pub fn new(size: usize) -> Self {
-        Self {
-            memory: Zeroizing::new(vec![0u8; size]),
-        }
-    }
-
-    /// バッファの内容をコピー
-    pub fn copy_from_slice(&mut self, data: &[u8]) -> CryptoResult<()> {
-        if data.len() > self.memory.len() {
-            return Err(CryptoError::MemoryError("Buffer size exceeded".to_string()));
-        }
-
-        self.memory[..data.len()].copy_from_slice(data);
-        Ok(())
-    }
-
-    /// バッファのスライスを取得
-    pub fn as_slice(&self) -> &[u8] {
-        &self.memory
-    }
-
-    /// バッファの可変スライスを取得
-    pub fn as_mut_slice(&mut self) -> &mut [u8] {
-        &mut self.memory
-    }
-
-    /// バッファをクリア
-    pub fn clear(&mut self) {
-        self.memory.zeroize();
-    }
-}
-
 /// メモリ保護ユーティリティ
 pub struct MemoryProtection;
 
@@ -356,12 +318,6 @@ impl MemoryProtection {
         std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::SeqCst);
     }
 
-    /// メモリバリアを設定
-    #[inline(always)]
-    pub fn memory_barrier() {
-        std::sync::atomic::fence(std::sync::atomic::Ordering::SeqCst);
-    }
-
     /// セキュアなメモリ比較
     pub fn secure_compare(a: &[u8], b: &[u8]) -> bool {
         use subtle::ConstantTimeEq;
@@ -371,37 +327,5 @@ impl MemoryProtection {
         }
 
         a.ct_eq(b).unwrap_u8() == 1
-    }
-}
-
-/// セキュアな一時変数
-/// スコープを抜ける際に自動的にゼロ化される変数を提供します。
-pub struct SecureTemp<T: Zeroize> {
-    value: Option<T>,
-}
-
-impl<T: Zeroize> SecureTemp<T> {
-    pub fn new(value: T) -> Self {
-        Self { value: Some(value) }
-    }
-
-    pub fn get(&self) -> Option<&T> {
-        self.value.as_ref()
-    }
-
-    pub fn get_mut(&mut self) -> Option<&mut T> {
-        self.value.as_mut()
-    }
-
-    pub fn take(&mut self) -> Option<T> {
-        self.value.take()
-    }
-}
-
-impl<T: Zeroize> Drop for SecureTemp<T> {
-    fn drop(&mut self) {
-        if let Some(mut val) = self.value.take() {
-            val.zeroize();
-        }
     }
 }

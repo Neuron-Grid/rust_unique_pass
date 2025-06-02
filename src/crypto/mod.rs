@@ -18,7 +18,7 @@ pub mod secure_memory;
 pub mod timing_safe;
 pub use rng::SecureRng;
 pub use secure_memory::{SecureMemory, SecureString};
-pub use timing_safe::{SecureStringOps, TimingSafeOps};
+pub use timing_safe::TimingSafeOps;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CryptoError {

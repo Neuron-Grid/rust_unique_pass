@@ -1,5 +1,3 @@
-// src/crypto/timing_safe.rs のテストを分離
-
 use rust_unique_pass::crypto::timing_safe::*;
 
 #[test]
@@ -14,7 +12,8 @@ fn test_constant_time_select() {
 
     // 範囲外のインデックス
     let result = TimingSafeOps::constant_time_select(&chars, 10);
-    assert!(result.is_some()); // モジュロで折り返す
+    // モジュロで折り返す
+    assert!(result.is_some());
 }
 
 #[test]
@@ -37,13 +36,15 @@ fn test_secure_random_index() {
         assert!(index < 10);
     }
 
-    // バイアス検証（簡易統計）
+    // バイアス検証
+    // 簡易統計
     let mut counts = [0usize; 10];
     for _ in 0..10_000 {
         let idx = TimingSafeOps::secure_random_index(&mut rng, 10);
         counts[idx] += 1;
     }
-    // 全てのインデックスが0でないこと（極端なバイアスがないこと）
+    // 全てのインデックスが0でないこと
+    // 極端なバイアスがないこと
     assert!(counts.iter().all(|&c| c > 0));
 }
 
@@ -55,7 +56,7 @@ fn test_secure_shuffle() {
     let rng = SecureRng::new().expect("Failed to create SecureRng");
     let mut rng = rng;
 
-    SecureStringOps::secure_shuffle(&mut items, &mut rng);
+    TimingSafeOps::secure_shuffle(&mut items, &mut rng);
 
     // 要素が保持されていることを確認
     items.sort();

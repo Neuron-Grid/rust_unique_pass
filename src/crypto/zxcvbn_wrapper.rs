@@ -20,16 +20,3 @@ pub fn zxcvbn_entropy_score(password: &str) -> Result<(f64, u8), String> {
         Err(e) => Err(format!("zxcvbn failed: {}", e)),
     }
 }
-
-/// 非推奨: 旧API（後方互換用）
-/// エラー時は(0.0, 0)を返す
-#[deprecated(
-    since = "1.1.0",
-    note = "zxcvbn_entropy_score()のResult型バージョンを使用してください"
-)]
-pub fn zxcvbn_entropy_score_legacy(password: &str) -> (f64, u8) {
-    match zxcvbn_entropy_score(password) {
-        Ok((entropy, score)) => (entropy, score),
-        Err(_) => (0.0, 0),
-    }
-}
