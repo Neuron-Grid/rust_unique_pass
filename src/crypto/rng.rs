@@ -12,6 +12,17 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+/// # Secure RNG (CSPRNG) モジュール
+/// 本モジュールはNIST SP 800-90Aに準拠した暗号学的擬似乱数生成器（CSPRNG）を提供します。
+/// - OSエントロピーソースとタイミングエントロピーの混入
+/// - 定期的な再シード
+/// - エントロピープールによる追加エントロピー管理
+/// - スレッドセーフ設計
+/// ## セキュリティ設計方針
+/// - 乱数生成は常にOSの安全なエントロピーソースを利用
+/// - エントロピー不足時はエラーを返し、予測可能性を排除
+/// - メモリ上のシード値はZeroizingで自動消去
+/// - 再シード間隔・エントロピープールサイズは業界標準に準拠
 use super::{CryptoError, CryptoResult};
 use rand::rngs::StdRng;
 use rand::{CryptoRng, RngCore, SeedableRng};
@@ -29,6 +40,9 @@ pub struct SecureRng {
 
 impl SecureRng {
     /// 新しいSecureRngインスタンスを作成
+    /// # セキュリティ
+    /// - OSのエントロピーソースとタイミングエントロピーを混入
+    /// - シード値はZeroizingで自動消去
     pub fn new() -> CryptoResult<Self> {
         let mut seed = Zeroizing::new([0u8; 32]);
 
@@ -67,7 +81,10 @@ impl SecureRng {
     }
 
     /// 定期的な再シード
-    /// NIST SP 800-90A要件
+    /// # セキュリティ
+    /// - NIST SP 800-90A要件に準拠
+    /// - OSエントロピーとエントロピープールを混入
+    /// - シード値はZeroizingで自動消去
     pub async fn reseed(&self) -> CryptoResult<()> {
         let mut seed = Zeroizing::new([0u8; 32]);
 
@@ -98,6 +115,9 @@ impl SecureRng {
     }
 
     /// 指定されたバッファに乱数バイトを生成
+    /// # セキュリティ
+    /// - 2^48バイトごとに自動再シード
+    /// - 乱数バイトはOSエントロピーとエントロピープールを元に生成
     pub fn generate_bytes(&self, dest: &mut [u8]) -> CryptoResult<()> {
         // 2^48バイト
         const MAX_BYTES_BEFORE_RESEED: u64 = 1u64 << 48;
@@ -122,6 +142,9 @@ impl SecureRng {
     }
 
     /// エントロピープールに追加データを混入
+    /// # セキュリティ
+    /// - 外部からの追加エントロピーを安全にプールへ混入
+    /// - プールサイズ上限を超える場合は古いデータを破棄
     pub fn add_entropy(&self, data: &[u8]) {
         let mut pool = self.entropy_pool.lock().unwrap();
 

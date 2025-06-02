@@ -12,7 +12,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
-//! 暗号学的セキュリティモジュール
+/// 暗号学的セキュリティモジュール
 pub mod rng;
 pub mod secure_memory;
 pub mod timing_safe;

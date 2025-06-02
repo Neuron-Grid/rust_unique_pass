@@ -12,11 +12,103 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+/// # Secure Memory モジュール
+/// 本モジュールはパスワードや秘密鍵などの機密データを安全にメモリ上で管理するための各種型・関数を提供します。
+/// - メモリロック（mlock/VirtualLock）によるスワップ防止
+/// - コアダンプ除外（Linux madvise）
+/// - 自動ゼロ化（drop時）
+/// - セキュアなバッファ・文字列型
+/// ## セキュリティ設計方針
+/// - 機密データは常にロック・ゼロ化・除外処理を徹底
+/// - OSごとの最適な保護APIを利用
+/// - エラー時は詳細な情報を返却
+///
 use super::{CryptoError, CryptoResult};
 use std::alloc::{Layout, alloc, dealloc};
 use std::pin::Pin;
 use std::ptr;
 use zeroize::{Zeroize, Zeroizing};
+
+/// プラットフォーム固有のメモリ保護機能を提供
+struct MemoryProtector;
+
+impl MemoryProtector {
+    /// メモリをロックしてスワップを防ぐ
+    #[inline]
+    fn lock_memory(ptr: *mut u8, size: usize) -> Result<(), String> {
+        #[cfg(unix)]
+        {
+            use libc::mlock;
+            unsafe {
+                if mlock(ptr as *mut _, size) != 0 {
+                    return Err("mlock failed".to_string());
+                }
+            }
+            Ok(())
+        }
+        #[cfg(windows)]
+        {
+            use windows_sys::Win32::System::Memory::VirtualLock;
+            unsafe {
+                if VirtualLock(ptr as *mut _, size) == 0 {
+                    return Err("VirtualLock failed".to_string());
+                }
+            }
+            Ok(())
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            // メモリロックはサポートされていないが、エラーにはしない
+            Ok(())
+        }
+    }
+
+    /// メモリロックを解除
+    #[inline]
+    fn unlock_memory(ptr: *mut u8, size: usize) -> Result<(), String> {
+        #[cfg(unix)]
+        {
+            use libc::munlock;
+            unsafe {
+                if munlock(ptr as *mut _, size) != 0 {
+                    return Err("munlock failed".to_string());
+                }
+            }
+            Ok(())
+        }
+        #[cfg(windows)]
+        {
+            use windows_sys::Win32::System::Memory::VirtualUnlock;
+            unsafe {
+                if VirtualUnlock(ptr as *mut _, size) == 0 {
+                    return Err("VirtualUnlock failed".to_string());
+                }
+            }
+            Ok(())
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            Ok(())
+        }
+    }
+
+    /// 追加のメモリ保護（コアダンプ除外など）
+    #[inline]
+    fn additional_protection(_ptr: *mut u8, _size: usize) -> Result<(), String> {
+        #[cfg(all(unix, target_os = "linux"))]
+        {
+            use libc::madvise;
+            const MADV_DONTDUMP: i32 = 16;
+            unsafe {
+                if madvise(_ptr as *mut _, _size, MADV_DONTDUMP) != 0 {
+                    // 警告だけで続行
+                    return Err("madvise failed (non-critical)".to_string());
+                }
+            }
+        }
+        Ok(())
+    }
+}
 
 /// セキュアメモリアロケータ
 /// メモリロックとゼロ化を自動的に行うセキュアなメモリ管理を提供します。
@@ -28,6 +120,10 @@ pub struct SecureMemory<T> {
 
 impl<T> SecureMemory<T> {
     /// 新しいセキュアメモリを割り当てる
+    /// - メモリロック（mlock/VirtualLock）でスワップ防止
+    /// - Linuxではmadviseでコアダンプ除外
+    /// - 割り当て直後にゼロクリア
+    /// - エラー時は詳細な情報を返却
     pub fn new(len: usize) -> CryptoResult<Self> {
         if len == 0 {
             return Err(CryptoError::MemoryError(
@@ -49,25 +145,19 @@ impl<T> SecureMemory<T> {
             // メモリをゼロクリア
             ptr::write_bytes(ptr, 0, len);
 
-            // メモリロック
-            // スワップ防止
-            #[cfg(unix)]
-            {
-                use libc::mlock;
+            // メモリロック（スワップ防止）
+            if let Err(e) = MemoryProtector::lock_memory(ptr as *mut u8, layout.size()) {
+                dealloc(ptr as *mut u8, layout);
+                return Err(CryptoError::MemoryError(format!(
+                    "Memory protection failed: {}",
+                    e
+                )));
+            }
 
-                // ページロック
-                if mlock(ptr as *mut _, layout.size()) != 0 {
-                    dealloc(ptr as *mut u8, layout);
-                    return Err(CryptoError::MemoryError("Memory lock failed".to_string()));
-                }
-
-                // コアダンプから除外
-                // Linuxのみ
-                #[cfg(target_os = "linux")]
-                {
-                    const MADV_DONTDUMP: i32 = 16;
-                    madvise(ptr as *mut _, layout.size(), MADV_DONTDUMP);
-                }
+            // 追加の保護（コアダンプ除外など）
+            if let Err(e) = MemoryProtector::additional_protection(ptr as *mut u8, layout.size()) {
+                // 追加保護の失敗は警告レベル、続行可能
+                eprintln!("Warning: Additional memory protection failed: {}", e);
             }
 
             ptr
@@ -93,11 +183,11 @@ impl<T> Drop for SecureMemory<T> {
             // メモリ内容の安全な消去
             ptr::write_bytes(self.ptr, 0, self.len);
 
-            // メモリアンロック
-            #[cfg(unix)]
+            // メモリロック解除
+            if let Err(e) = MemoryProtector::unlock_memory(self.ptr as *mut u8, self.layout.size())
             {
-                use libc::munlock;
-                munlock(self.ptr as *mut _, self.layout.size());
+                // ロック解除の失敗は警告レベル
+                eprintln!("Warning: Memory unlock failed: {}", e);
             }
 
             // メモリ解放

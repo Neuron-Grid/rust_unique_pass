@@ -12,6 +12,16 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+///
+/// # Timing Safe Operations モジュール
+///
+/// 本モジュールはタイミング攻撃・キャッシュ攻撃・電力解析攻撃などのサイドチャネル攻撃対策を目的とした各種セキュア操作を提供します。
+///
+/// ## セキュリティ設計方針
+/// - すべての比較・選択・シャッフル操作は定時間で実行
+/// - キャッシュ・電力パターンのノイズ挿入
+/// - subtleクレート等の業界標準技術を活用
+///
 use rand::RngCore;
 use std::sync::atomic::{AtomicU64, Ordering};
 use subtle::{Choice, ConstantTimeEq};
@@ -21,8 +31,10 @@ pub struct TimingSafeOps;
 
 impl TimingSafeOps {
     /// 定時間文字選択
-    /// インデックスに関わらず、常に同じ時間で文字を選択します。
-    /// これによりタイミング攻撃を防ぎます。
+    ///
+    /// # セキュリティ
+    /// - インデックスに関わらず、常に同じ時間で文字を選択
+    /// - タイミング攻撃を防止
     pub fn constant_time_select(chars: &[char], index: usize) -> Option<char> {
         if chars.is_empty() {
             return None;
@@ -57,6 +69,11 @@ impl TimingSafeOps {
     }
 
     /// 定時間比較
+    ///
+    /// # セキュリティ
+    /// - 文字列長が異なる場合も定時間で比較
+    /// - subtleクレートによる定時間比較
+    /// - タイミング攻撃を防止
     pub fn constant_time_compare(a: &str, b: &str) -> bool {
         if a.len() != b.len() {
             // 長さが異なる場合も、定時間で比較を行う
@@ -102,7 +119,11 @@ impl TimingSafeOps {
     }
 
     /// セキュアなインデックス生成
-    /// モジュロバイアス対策
+    ///
+    /// # セキュリティ
+    /// - モジュロバイアスを排除したインデックス生成
+    /// - 定時間性を維持するため、常に同じ処理を実行
+    /// - タイミング攻撃・バイアス攻撃を防止
     pub fn secure_random_index(rng: &mut impl RngCore, max: usize) -> usize {
         if max == 0 {
             return 0;
@@ -265,7 +286,11 @@ impl SecureStringOps {
     }
 
     /// セキュアなシャッフル
-    /// Fisher-Yates
+    ///
+    /// # セキュリティ
+    /// - Fisher-Yatesアルゴリズムを定時間・バイアスなしで実行
+    /// - 各swap操作ごとにタイミングノイズを挿入
+    /// - タイミング攻撃・バイアス攻撃を防止
     pub fn secure_shuffle<T: Clone>(items: &mut Vec<T>, rng: &mut impl RngCore) {
         let len = items.len();
 
