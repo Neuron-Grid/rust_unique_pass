@@ -65,6 +65,8 @@ impl TimingSafeOps {
         let mask = u32::from(choice.unwrap_u8()).wrapping_neg();
         let result = (a_val & !mask) | (b_val & mask);
 
+        // char::from_u32は無効なUnicodeコードポイントでNoneを返す可能性があるが、
+        // a_valとb_valは既に有効なcharから来ているため、resultも有効なはず
         char::from_u32(result).unwrap_or(a)
     }
 
@@ -188,9 +190,17 @@ impl CacheProtection {
     /// キャッシュフラッシュ
     /// 大量のダミーデータでキャッシュを埋めることで、
     /// 以前のアクセスパターンを隠蔽します。
-    pub fn flush_cache() {
+    pub fn flush_cache() -> Result<(), String> {
         // 8MBのダミーデータでキャッシュを埋める
-        let dummy: Vec<u8> = vec![0u8; 8 * 1024 * 1024];
+        const CACHE_SIZE: usize = 8 * 1024 * 1024;
+
+        // try_reserveでメモリ不足を検出
+        let mut dummy = Vec::new();
+        if let Err(e) = dummy.try_reserve(CACHE_SIZE) {
+            return Err(format!("Failed to allocate cache flush buffer: {}", e));
+        }
+        dummy.resize(CACHE_SIZE, 0u8);
+
         let mut sum: u8 = 0;
 
         for &byte in dummy.iter() {
@@ -199,15 +209,22 @@ impl CacheProtection {
 
         // 最適化防止
         std::hint::black_box(sum);
+
+        Ok(())
     }
 
     /// メモリアクセスパターンの隠蔽
-    pub fn obfuscate_memory_access<T: Clone>(data: &[T], index: usize) -> T {
+    pub fn obfuscate_memory_access<T: Clone>(data: &[T], index: usize) -> Option<T> {
+        if data.is_empty() {
+            return None;
+        }
+
         // 全要素にアクセスして、特定のインデックスへのアクセスを隠す
+        let safe_index = index % data.len();
         let mut result = data[0].clone();
 
         for (i, item) in data.iter().enumerate() {
-            let is_target = (i == index) as u8;
+            let is_target = (i == safe_index) as u8;
             if is_target == 1 {
                 result = item.clone();
             }
@@ -215,7 +232,7 @@ impl CacheProtection {
             std::hint::black_box(item);
         }
 
-        result
+        Some(result)
     }
 }
 

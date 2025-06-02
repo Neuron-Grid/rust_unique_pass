@@ -73,7 +73,9 @@ impl SecureRng {
             let start = SystemTime::now();
             // CPU集約的な操作でタイミングの変動を生成
             let _ = (0..1000).fold(1u64, |acc, x| acc.wrapping_mul(x + 1));
-            let duration = start.elapsed().unwrap_or_default();
+            let duration = start
+                .elapsed()
+                .unwrap_or_else(|_| std::time::Duration::from_nanos(0));
             entropy.extend_from_slice(&duration.as_nanos().to_le_bytes());
         }
 
@@ -95,8 +97,13 @@ impl SecureRng {
                 .map_err(|_| CryptoError::RngInitError)?
                 .map_err(|_| CryptoError::EntropySourceFailure)?;
 
-        let mut rng = self.rng.lock().unwrap();
-        let mut pool = self.entropy_pool.lock().unwrap();
+        let mut rng = self
+            .rng
+            .lock()
+            .map_err(|e| CryptoError::MutexPoisoned(format!("RNG mutex poisoned: {}", e)))?;
+        let mut pool = self.entropy_pool.lock().map_err(|e| {
+            CryptoError::MutexPoisoned(format!("Entropy pool mutex poisoned: {}", e))
+        })?;
 
         // エントロピープールからの追加エントロピー
         if pool.len() >= 32 {
@@ -109,7 +116,9 @@ impl SecureRng {
 
         let seed_array = *seed_bytes;
         *rng = StdRng::from_seed(seed_array);
-        *self.reseed_counter.lock().unwrap() = 0;
+        *self.reseed_counter.lock().map_err(|e| {
+            CryptoError::MutexPoisoned(format!("Reseed counter mutex poisoned: {}", e))
+        })? = 0;
 
         Ok(())
     }
@@ -122,7 +131,9 @@ impl SecureRng {
         // 2^48バイト
         const MAX_BYTES_BEFORE_RESEED: u64 = 1u64 << 48;
 
-        let mut counter = self.reseed_counter.lock().unwrap();
+        let mut counter = self.reseed_counter.lock().map_err(|e| {
+            CryptoError::MutexPoisoned(format!("Reseed counter mutex poisoned: {}", e))
+        })?;
 
         // 再シード間隔の確認
         if *counter > MAX_BYTES_BEFORE_RESEED {
@@ -131,10 +142,15 @@ impl SecureRng {
             tokio::task::block_in_place(|| {
                 tokio::runtime::Handle::current().block_on(self.reseed())
             })?;
-            counter = self.reseed_counter.lock().unwrap();
+            counter = self.reseed_counter.lock().map_err(|e| {
+                CryptoError::MutexPoisoned(format!("Reseed counter mutex poisoned: {}", e))
+            })?;
         }
 
-        let mut rng = self.rng.lock().unwrap();
+        let mut rng = self
+            .rng
+            .lock()
+            .map_err(|e| CryptoError::MutexPoisoned(format!("RNG mutex poisoned: {}", e)))?;
         rng.fill_bytes(dest);
         *counter += dest.len() as u64;
 
@@ -145,8 +161,10 @@ impl SecureRng {
     /// # セキュリティ
     /// - 外部からの追加エントロピーを安全にプールへ混入
     /// - プールサイズ上限を超える場合は古いデータを破棄
-    pub fn add_entropy(&self, data: &[u8]) {
-        let mut pool = self.entropy_pool.lock().unwrap();
+    pub fn add_entropy(&self, data: &[u8]) -> CryptoResult<()> {
+        let mut pool = self.entropy_pool.lock().map_err(|e| {
+            CryptoError::MutexPoisoned(format!("Entropy pool mutex poisoned: {}", e))
+        })?;
 
         // プールサイズの上限を設定
         const MAX_POOL_SIZE: usize = 4096;
@@ -159,24 +177,46 @@ impl SecureRng {
             pool.drain(..overflow);
             pool.extend_from_slice(data);
         }
+        Ok(())
     }
 }
 
 impl RngCore for SecureRng {
     fn next_u32(&mut self) -> u32 {
         let mut bytes = [0u8; 4];
-        self.generate_bytes(&mut bytes).expect("RNG failure");
+        // RngCore trait要件により、エラー時のパニックは避けられないが、
+        // エラー内容を記録してからより安全にパニックする
+        if let Err(e) = self.generate_bytes(&mut bytes) {
+            // エラーログを記録
+            eprintln!("Critical RNG failure in next_u32: {}", e);
+            // システムの安全性のため、エラー詳細を隠蔽したメッセージでパニック
+            panic!("Critical RNG failure: unable to generate random data");
+        }
         u32::from_le_bytes(bytes)
     }
 
     fn next_u64(&mut self) -> u64 {
         let mut bytes = [0u8; 8];
-        self.generate_bytes(&mut bytes).expect("RNG failure");
+        // RngCore trait要件により、エラー時のパニックは避けられないが、
+        // エラー内容を記録してからより安全にパニックする
+        if let Err(e) = self.generate_bytes(&mut bytes) {
+            // エラーログを記録
+            eprintln!("Critical RNG failure in next_u64: {}", e);
+            // システムの安全性のため、エラー詳細を隠蔽したメッセージでパニック
+            panic!("Critical RNG failure: unable to generate random data");
+        }
         u64::from_le_bytes(bytes)
     }
 
     fn fill_bytes(&mut self, dest: &mut [u8]) {
-        self.generate_bytes(dest).expect("RNG failure");
+        // RngCore trait要件により、エラー時のパニックは避けられないが、
+        // エラー内容を記録してからより安全にパニックする
+        if let Err(e) = self.generate_bytes(dest) {
+            // エラーログを記録
+            eprintln!("Critical RNG failure in fill_bytes: {}", e);
+            // システムの安全性のため、エラー詳細を隠蔽したメッセージでパニック
+            panic!("Critical RNG failure: unable to generate random data");
+        }
     }
 }
 

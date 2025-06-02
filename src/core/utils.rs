@@ -16,6 +16,7 @@ use crate::cli::UserInterface;
 use crate::core::app_errors::{GenerationError, Result};
 use fluent::{FluentArgs, FluentBundle, FluentResource};
 use futures::{FutureExt, future::LocalBoxFuture};
+use std::fmt;
 
 /// # Overview
 /// 指定されたキーに対応する翻訳メッセージを [`FluentBundle`] から取得します。
@@ -60,8 +61,8 @@ pub fn fallback_translation(
 /// * `F`: パース関数の型。
 /// * `H`: エラーハンドラクロージャの型。
 ///
-/// # Panics
-/// 連続した入力読み取りエラーが最大再試行回数(10回)を超えた場合にパニックします。
+/// # Errors
+/// 連続した入力読み取りエラーが最大再試行回数(10回)を超えた場合にエラーを返します。
 #[doc(alias = "prompt")]
 #[doc(alias = "input loop")]
 pub async fn prompt_loop<T, E, F, H>(
@@ -69,10 +70,11 @@ pub async fn prompt_loop<T, E, F, H>(
     prompt: &str,
     parse_fn: F,
     mut on_err: H,
-) -> T
+) -> Result<T>
 where
     F: Fn(&str) -> std::result::Result<T, E>,
     H: for<'a> FnMut(&'a mut dyn UserInterface, &'a E) -> LocalBoxFuture<'a, ()>,
+    E: fmt::Display + 'static,
 {
     const MAX_INPUT_FAILURES: usize = 10;
     let mut consecutive_failures = 0;
@@ -93,17 +95,18 @@ where
                 if let Err(_e) = ui.print(&retry_msg).await {}
 
                 if consecutive_failures >= MAX_INPUT_FAILURES {
-                    panic!(
-                        "Consecutive input errors exceeded maximum attempts ({}). Terminating system.",
-                        MAX_INPUT_FAILURES
-                    );
+                    return Err(GenerationError::InputFailure(format!(
+                        "Consecutive input errors exceeded maximum attempts ({}). Last error: {}",
+                        MAX_INPUT_FAILURES, e
+                    ))
+                    .into());
                 }
                 continue;
             }
         };
 
         match parse_fn(&input) {
-            Ok(v) => break v,
+            Ok(v) => break Ok(v),
             Err(e) => on_err(ui, &e).await,
         }
     }
@@ -150,7 +153,7 @@ pub async fn ask_user_yes_no(
             .boxed_local()
         }
     })
-    .await;
+    .await?;
 
     Ok(ans)
 }

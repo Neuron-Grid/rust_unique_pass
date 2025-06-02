@@ -67,7 +67,7 @@ pub async fn get_password_length(
             async move { if let Err(_e) = ui.print(&msg).await {} }.boxed_local()
         }
     })
-    .await;
+    .await?;
     Ok(len)
 }
 

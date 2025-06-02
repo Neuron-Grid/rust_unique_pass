@@ -235,9 +235,26 @@ impl SecureString {
     }
 
     /// 文字列として参照
+    /// # Returns
+    /// 内部データが有効なUTF-8の場合、文字列スライスを返します。
+    /// 無効なUTF-8の場合、空文字列を返します（安全性のため）。
+    ///
+    /// # Notes
+    /// より厳密なエラーハンドリングが必要な場合は`try_as_str()`を使用してください。
     pub fn as_str(&self) -> &str {
         let slice = &self.data.as_slice()[..self.len];
-        std::str::from_utf8(slice).expect("Valid UTF-8")
+        std::str::from_utf8(slice).unwrap_or_else(|_| {
+            // パニックを避けるため、空文字列を返す
+            // エラーログを出力して問題を記録
+            eprintln!("Warning: SecureString contains invalid UTF-8 data");
+            ""
+        })
+    }
+
+    /// 文字列として安全に参照
+    pub fn try_as_str(&self) -> Result<&str, std::str::Utf8Error> {
+        let slice = &self.data.as_slice()[..self.len];
+        std::str::from_utf8(slice)
     }
 
     /// 内部の長さを取得
@@ -261,7 +278,9 @@ impl Drop for SecureString {
         // 明示的なゼロ化
         // SecureMemoryのDropでも行われるが、二重に保護
         if self.len > 0 {
-            let slice = unsafe { std::slice::from_raw_parts_mut(self.data.ptr, self.len) };
+            // data.as_mut_slice()を使用してより安全にアクセス
+            let pinned = unsafe { Pin::get_unchecked_mut(self.data.as_mut()) };
+            let slice = &mut pinned.as_mut_slice()[..self.len];
             slice.zeroize();
         }
     }

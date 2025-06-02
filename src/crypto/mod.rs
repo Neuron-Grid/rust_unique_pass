@@ -39,6 +39,9 @@ pub enum CryptoError {
 
     #[error("Memory security error: {0}")]
     MemoryError(String),
+
+    #[error("Mutex poisoned: {0}")]
+    MutexPoisoned(String),
 }
 
 /// Crypto モジュール専用のResult型
