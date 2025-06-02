@@ -21,7 +21,6 @@ pub struct TimingSafeOps;
 
 impl TimingSafeOps {
     /// 定時間文字選択
-    ///
     /// インデックスに関わらず、常に同じ時間で文字を選択します。
     /// これによりタイミング攻撃を防ぎます。
     pub fn constant_time_select(chars: &[char], index: usize) -> Option<char> {
@@ -33,7 +32,7 @@ impl TimingSafeOps {
         let len = chars.len();
         let safe_index = index % len;
 
-        // 全要素を走査し、条件付きで選択（分岐なし）
+        // 全要素を走査し、条件付きで選択
         let mut result = chars[0];
         for (i, &ch) in chars.iter().enumerate() {
             // i == safe_indexの場合に1、そうでない場合に0
@@ -45,7 +44,7 @@ impl TimingSafeOps {
         Some(result)
     }
 
-    /// 条件付き文字選択（分岐なし）
+    /// 条件付き文字選択
     fn conditional_select_char(a: char, b: char, choice: Choice) -> char {
         let a_val = a as u32;
         let b_val = b as u32;
@@ -67,7 +66,8 @@ impl TimingSafeOps {
         a.as_bytes().ct_eq(b.as_bytes()).unwrap_u8() == 1
     }
 
-    /// バイト列の定時間比較（長さが異なる場合も対応）
+    /// バイト列の定時間比較
+    /// 長さが異なる場合も対応
     fn constant_time_compare_bytes(a: &[u8], b: &[u8]) -> bool {
         let len = a.len().max(b.len());
         let mut result = Choice::from(1u8);
@@ -75,7 +75,8 @@ impl TimingSafeOps {
         // 長さの比較
         result &= a.len().ct_eq(&b.len());
 
-        // 内容の比較（パディングして同じ長さにする）
+        // 内容の比較
+        // パディングして同じ長さにする
         for i in 0..len {
             let a_byte = if i < a.len() { a[i] } else { 0 };
             let b_byte = if i < b.len() { b[i] } else { 0 };
@@ -100,7 +101,8 @@ impl TimingSafeOps {
         }
     }
 
-    /// セキュアなインデックス生成（モジュロバイアス対策）
+    /// セキュアなインデックス生成
+    /// モジュロバイアス対策
     pub fn secure_random_index(rng: &mut impl RngCore, max: usize) -> usize {
         if max == 0 {
             return 0;
@@ -118,7 +120,8 @@ impl TimingSafeOps {
             if masked_index < max {
                 return masked_index;
             }
-            // リトライ（定時間性を保つため、常に同じ処理を実行）
+            // リトライ
+            // 定時間性を保つため、常に同じ処理を実行
             Self::add_timing_noise();
         }
     }
@@ -129,27 +132,39 @@ pub struct CacheProtection;
 
 impl CacheProtection {
     /// キャッシュラインのプリフェッチ
-    ///
     /// 全データをキャッシュに読み込むことで、
     /// アクセスパターンからの情報漏洩を防ぎます。
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    #[cfg(target_arch = "x86_64")]
     pub fn prefetch_all<T>(data: &[T]) {
         unsafe {
             use core::arch::x86_64::_mm_prefetch;
-
             for item in data {
                 _mm_prefetch(item as *const T as *const i8, 0);
             }
         }
     }
 
-    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
-    pub fn prefetch_all<T>(_data: &[T]) {
-        // 他のアーキテクチャでは何もしない
+    #[cfg(target_arch = "x86")]
+    pub fn prefetch_all<T>(data: &[T]) {
+        unsafe {
+            use core::arch::x86::_mm_prefetch;
+            for item in data {
+                _mm_prefetch(item as *const T as *const i8, 0);
+            }
+        }
+    }
+
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "x86")))]
+    pub fn prefetch_all<T>(data: &[T]) {
+        // 汎用: volatile読み出しでキャッシュに載せる
+        for item in data {
+            unsafe {
+                std::ptr::read_volatile(item);
+            }
+        }
     }
 
     /// キャッシュフラッシュ
-    ///
     /// 大量のダミーデータでキャッシュを埋めることで、
     /// 以前のアクセスパターンを隠蔽します。
     pub fn flush_cache() {
@@ -188,7 +203,6 @@ pub struct PowerAnalysisProtection;
 
 impl PowerAnalysisProtection {
     /// ビット演算のマスキング
-    ///
     /// 敏感なデータをランダムマスクで保護し、
     /// 電力消費パターンからの情報漏洩を防ぎます。
     pub fn masked_operation<F>(data: u32, operation: F) -> u32
@@ -209,7 +223,6 @@ impl PowerAnalysisProtection {
     }
 
     /// ダミー演算の挿入
-    ///
     /// 本物の演算と区別がつかないダミー演算を挿入し、
     /// 電力パターンを複雑化します。
     pub fn insert_dummy_operations() {
@@ -242,7 +255,8 @@ impl SecureStringOps {
                     result.push(ch);
                 }
             } else {
-                // パディング（実際には追加されない）
+                // パディング
+                // 実際には追加されない
                 let _ = result.capacity();
             }
         }
@@ -250,7 +264,8 @@ impl SecureStringOps {
         result
     }
 
-    /// セキュアなシャッフル（Fisher-Yates）
+    /// セキュアなシャッフル
+    /// Fisher-Yates
     pub fn secure_shuffle<T: Clone>(items: &mut Vec<T>, rng: &mut impl RngCore) {
         let len = items.len();
 

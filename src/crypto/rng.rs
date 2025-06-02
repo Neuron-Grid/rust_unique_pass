@@ -17,8 +17,8 @@ use rand::rngs::StdRng;
 use rand::{CryptoRng, RngCore, SeedableRng};
 use std::sync::Mutex;
 use zeroize::Zeroizing;
+
 /// NIST SP 800-90A準拠のCSPRNG実装
-///
 /// 暗号学的に安全な擬似乱数生成器。
 /// 定期的な再シードとエントロピープールの管理を行います。
 pub struct SecureRng {
@@ -66,7 +66,8 @@ impl SecureRng {
         entropy
     }
 
-    /// 定期的な再シード（NIST SP 800-90A要件）
+    /// 定期的な再シード
+    /// NIST SP 800-90A要件
     pub async fn reseed(&self) -> CryptoResult<()> {
         let mut seed = Zeroizing::new([0u8; 32]);
 
@@ -98,13 +99,15 @@ impl SecureRng {
 
     /// 指定されたバッファに乱数バイトを生成
     pub fn generate_bytes(&self, dest: &mut [u8]) -> CryptoResult<()> {
-        const MAX_BYTES_BEFORE_RESEED: u64 = 1u64 << 48; // 2^48バイト
+        // 2^48バイト
+        const MAX_BYTES_BEFORE_RESEED: u64 = 1u64 << 48;
 
         let mut counter = self.reseed_counter.lock().unwrap();
 
         // 再シード間隔の確認
         if *counter > MAX_BYTES_BEFORE_RESEED {
-            drop(counter); // ロック解放
+            // ロック解放
+            drop(counter);
             tokio::task::block_in_place(|| {
                 tokio::runtime::Handle::current().block_on(self.reseed())
             })?;

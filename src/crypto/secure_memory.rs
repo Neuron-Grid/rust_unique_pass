@@ -19,7 +19,6 @@ use std::ptr;
 use zeroize::{Zeroize, Zeroizing};
 
 /// セキュアメモリアロケータ
-///
 /// メモリロックとゼロ化を自動的に行うセキュアなメモリ管理を提供します。
 pub struct SecureMemory<T> {
     ptr: *mut T,
@@ -32,23 +31,26 @@ impl<T> SecureMemory<T> {
     pub fn new(len: usize) -> CryptoResult<Self> {
         if len == 0 {
             return Err(CryptoError::MemoryError(
-                "長さゼロのメモリ割り当て".to_string(),
+                "Zero-length memory allocation".to_string(),
             ));
         }
 
         let layout = Layout::array::<T>(len)
-            .map_err(|_| CryptoError::MemoryError("レイアウトエラー".to_string()))?;
+            .map_err(|_| CryptoError::MemoryError("Layout error".to_string()))?;
 
         let ptr = unsafe {
             let ptr = alloc(layout) as *mut T;
             if ptr.is_null() {
-                return Err(CryptoError::MemoryError("メモリ割り当て失敗".to_string()));
+                return Err(CryptoError::MemoryError(
+                    "Memory allocation failed".to_string(),
+                ));
             }
 
             // メモリをゼロクリア
             ptr::write_bytes(ptr, 0, len);
 
-            // メモリロック（スワップ防止）
+            // メモリロック
+            // スワップ防止
             #[cfg(unix)]
             {
                 use libc::mlock;
@@ -56,10 +58,11 @@ impl<T> SecureMemory<T> {
                 // ページロック
                 if mlock(ptr as *mut _, layout.size()) != 0 {
                     dealloc(ptr as *mut u8, layout);
-                    return Err(CryptoError::MemoryError("メモリロック失敗".to_string()));
+                    return Err(CryptoError::MemoryError("Memory lock failed".to_string()));
                 }
 
-                // コアダンプから除外（Linuxのみ）
+                // コアダンプから除外
+                // Linuxのみ
                 #[cfg(target_os = "linux")]
                 {
                     const MADV_DONTDUMP: i32 = 16;
@@ -103,11 +106,11 @@ impl<T> Drop for SecureMemory<T> {
     }
 }
 
-// Sendを安全に実装（Tに依存）
+// Sendを安全に実装
+// Tに依存
 unsafe impl<T: Send> Send for SecureMemory<T> {}
 
 /// パスワード用のセキュアな文字列型
-///
 /// 自動的にゼロ化され、メモリロックされた文字列を提供します。
 pub struct SecureString {
     data: Pin<Box<SecureMemory<u8>>>,
@@ -165,7 +168,8 @@ impl SecureString {
 
 impl Drop for SecureString {
     fn drop(&mut self) {
-        // 明示的なゼロ化（SecureMemoryのDropでも行われるが、二重の保護）
+        // 明示的なゼロ化
+        // SecureMemoryのDropでも行われるが、二重に保護
         if self.len > 0 {
             let slice = unsafe { std::slice::from_raw_parts_mut(self.data.ptr, self.len) };
             slice.zeroize();
@@ -176,7 +180,7 @@ impl Drop for SecureString {
 impl std::fmt::Display for SecureString {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // セキュリティのため、内容を表示しない
-        write!(f, "[SECURE STRING: {} bytes]", self.len)
+        write!(f, "SECURE STRING: {} bytes", self.len)
     }
 }
 
@@ -191,7 +195,6 @@ impl std::fmt::Debug for SecureString {
 }
 
 /// セキュアなバッファ
-///
 /// 一時的なデータ保存用のセキュアバッファを提供します。
 pub struct SecureBuffer {
     memory: Zeroizing<Vec<u8>>,
@@ -208,7 +211,7 @@ impl SecureBuffer {
     /// バッファの内容をコピー
     pub fn copy_from_slice(&mut self, data: &[u8]) -> CryptoResult<()> {
         if data.len() > self.memory.len() {
-            return Err(CryptoError::MemoryError("バッファサイズ超過".to_string()));
+            return Err(CryptoError::MemoryError("Buffer size exceeded".to_string()));
         }
 
         self.memory[..data.len()].copy_from_slice(data);
@@ -263,7 +266,6 @@ impl MemoryProtection {
 }
 
 /// セキュアな一時変数
-///
 /// スコープを抜ける際に自動的にゼロ化される変数を提供します。
 pub struct SecureTemp<T: Zeroize> {
     value: Option<T>,

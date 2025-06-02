@@ -13,35 +13,31 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 //! 暗号学的セキュリティモジュール
-
-/* pub mod entropy; */
 pub mod rng;
 pub mod secure_memory;
 pub mod timing_safe;
-
-/* pub use entropy::{EntropyCollector, PasswordStrengthAnalyzer}; */
 pub use rng::SecureRng;
 pub use secure_memory::{SecureMemory, SecureString};
 pub use timing_safe::{SecureStringOps, TimingSafeOps};
 
 #[derive(Debug, thiserror::Error)]
 pub enum CryptoError {
-    #[error("エントロピーソースの取得に失敗しました")]
+    #[error("Failed to obtain entropy source")]
     EntropySourceFailure,
 
-    #[error("不十分なエントロピー")]
+    #[error("Insufficient entropy")]
     InsufficientEntropy,
 
-    #[error("要求サイズが大きすぎます")]
+    #[error("Requested size is too large")]
     RequestTooLarge,
 
-    #[error("再シードが必要です")]
+    #[error("Reseed required")]
     ReseedRequired,
 
-    #[error("RNG初期化エラー")]
+    #[error("RNG initialization error")]
     RngInitError,
 
-    #[error("メモリセキュリティエラー: {0}")]
+    #[error("Memory security error: {0}")]
     MemoryError(String),
 }
 
