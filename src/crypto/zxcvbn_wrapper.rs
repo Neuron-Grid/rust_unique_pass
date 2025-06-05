@@ -1,5 +1,7 @@
 use zxcvbn::zxcvbn;
 
+pub const MAX_PASSWORD_LENGTH: usize = 1024;
+
 /// zxcvbnによるパスワード強度推定（推奨）
 /// # 引数
 /// - `password`: 評価対象のパスワード文字列
@@ -10,13 +12,20 @@ use zxcvbn::zxcvbn;
 /// - この関数はzxcvbnアルゴリズムを用いてパスワード強度を推定します。
 /// - エラー時は詳細なエラー内容を返します。
 pub fn zxcvbn_entropy_score(password: &str) -> Result<(f64, u8), String> {
-    match zxcvbn(password, &[]) {
-        Ok(result) => {
-            let guesses = result.guesses();
-            // log2(10) ≈ 3.321928
-            let bits_of_entropy = guesses.log10() * 3.321928094887362;
-            Ok((bits_of_entropy, result.score()))
-        }
-        Err(e) => Err(format!("zxcvbn failed: {}", e)),
+    if password.is_empty() {
+        return Err("password cannot be empty".to_string());
     }
+    if password.len() > MAX_PASSWORD_LENGTH {
+        return Err(format!(
+            "password length {} exceeds maximum allowed {}",
+            password.len(),
+            MAX_PASSWORD_LENGTH
+        ));
+    }
+
+    let analysis = zxcvbn(password, &[]);
+    let guesses_f = analysis.guesses() as f64;
+    let bits_of_entropy = guesses_f.log10() * 3.321928094887362;
+    let score_u8: u8 = analysis.score().into();
+    Ok((bits_of_entropy, score_u8))
 }

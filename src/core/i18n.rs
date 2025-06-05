@@ -120,19 +120,7 @@ fn load_fluent_bundle(language: &str) -> Result<FluentBundle<FluentResource>> {
 #[doc(alias = "localization")]
 pub fn initialize_bundle(args: &RupassArgs) -> Result<FluentBundle<FluentResource>> {
     let language = resolve_language(args);
-
-    // 指定言語でのロードを試行
-    match load_fluent_bundle(&language) {
-        Ok(bundle) => Ok(bundle),
-        Err(e) => {
-            // Fallback to default language
-            if language != DEFAULT_LANGUAGE {
-                load_fluent_bundle(DEFAULT_LANGUAGE).map_err(|fallback_err| fallback_err)
-            } else {
-                Err(e)
-            }
-        }
-    }
+    load_fluent_bundle(&language)
 }
 
 /// # Overview

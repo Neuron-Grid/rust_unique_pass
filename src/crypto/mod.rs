@@ -16,6 +16,7 @@ limitations under the License. */
 pub mod rng;
 pub mod secure_memory;
 pub mod timing_safe;
+pub mod zxcvbn_wrapper;
 pub use rng::SecureRng;
 pub use secure_memory::{SecureMemory, SecureString};
 pub use timing_safe::TimingSafeOps;
