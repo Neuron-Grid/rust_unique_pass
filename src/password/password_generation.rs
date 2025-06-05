@@ -13,6 +13,7 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 use crate::core::app_errors::{GenerationError, Result};
+use crate::crypto::rng::SecureRng;
 use crate::password::password_length::validate_password_length;
 use rand::prelude::IndexedRandom;
 use rand::prelude::SliceRandom;
@@ -81,7 +82,11 @@ pub async fn assemble_random_password(
     if all_vec.is_empty() {
         return None;
     }
-    let mut rng = rand::rng();
+    let mut rng = match SecureRng::new() {
+        Ok(rng) => rng,
+        // 乱数生成器初期化失敗時はNone返却
+        Err(_) => return None,
+    };
 
     // 各必須セットから1文字ずつ
     let need: Vec<char> = req

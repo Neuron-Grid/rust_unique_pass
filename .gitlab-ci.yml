@@ -19,6 +19,9 @@ test-job:
     - cargo check
     - cargo test
     - cargo publish --dry-run
+    # 依存関係の脆弱性スキャン（本番依存も含む）
+    - cargo install cargo-audit --locked
+    - cargo audit --deny warnings
   allow_failure: false
 
 deploy-job:
