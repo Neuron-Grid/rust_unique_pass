@@ -17,7 +17,7 @@ thiserror = "2.0.12"
 clap = { version = "4.5.39", features = ["derive"] }
 fluent = "0.17.0"
 rand = "0.9.1"
-rand_chacha = "0.3.1"
+rand_chacha = "0.9.0"
 rust-embed = { version = "8.7.2", features = ["include-exclude"] }
 unic-langid = "0.9.6"
 zxcvbn = "3.1.0"
@@ -26,7 +26,7 @@ async-trait = "0.1.88"
 futures = { version = "0.3.31", default-features = false, features = ["alloc"] }
 zeroize = "1.8.1"
 zeroize_derive = { version = "1.4.2", optional = true }
-getrandom = "0.2.16"
+getrandom = "0.3.3"
 subtle = "2.6.1"
 sha2 = "0.10.9"
 num_cpus = "1.17.0"

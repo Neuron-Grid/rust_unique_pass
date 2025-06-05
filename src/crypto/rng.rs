@@ -12,16 +12,17 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+/// - 乱数生成は常にOSの安全なエントロピーソースを利用
+/// - エントロピー不足時はエラーを返し、予測可能性を排除
+/// - メモリ上のシード値はZeroizingで自動消去
+use super::{CryptoError, CryptoResult};
+use rand::rng;
 /// # Secure RNG (CSPRNG) モジュール
 /// 本モジュールはNIST SP 800-90Aに準拠した暗号学的擬似乱数生成器（CSPRNG）を提供します。
 /// - OSエントロピーソースとタイミングエントロピーの混入
 /// - シンプルな再シード
 /// - スレッドセーフ設計
 /// ## セキュリティ設計方針
-/// - 乱数生成は常にOSの安全なエントロピーソースを利用
-/// - エントロピー不足時はエラーを返し、予測可能性を排除
-/// - メモリ上のシード値はZeroizingで自動消去
-use super::{CryptoError, CryptoResult};
 use rand::rngs::StdRng;
 use rand::{CryptoRng, RngCore, SeedableRng};
 use std::sync::Mutex;
@@ -42,7 +43,8 @@ impl SecureRng {
         let mut seed = Zeroizing::new([0u8; 32]);
 
         // OSのエントロピーソースから初期シード取得
-        getrandom::getrandom(&mut seed[..]).map_err(|_| CryptoError::EntropySourceFailure)?;
+        let mut rng = rng();
+        rng.fill_bytes(&mut seed[..]);
 
         // 追加のタイミングエントロピーを混入
         let timing_entropy = Self::collect_timing_entropy();
@@ -88,7 +90,8 @@ impl SecureRng {
     /// 再シード（必要な場合のみ手動で呼び出し）
     pub fn reseed(&self) -> CryptoResult<()> {
         let mut seed = Zeroizing::new([0u8; 32]);
-        getrandom::getrandom(&mut seed[..]).map_err(|_| CryptoError::EntropySourceFailure)?;
+        let mut rng = rng();
+        rng.fill_bytes(&mut seed[..]);
 
         let timing_entropy = Self::collect_timing_entropy();
         for (i, &byte) in timing_entropy.iter().enumerate().take(32) {
