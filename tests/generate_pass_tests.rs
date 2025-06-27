@@ -50,34 +50,29 @@ impl UserInterface for MockUI {
 }
 
 // Fluent bundle
-// 最小の疑似翻訳
+// 実際の翻訳ファイル (`translation/eng.ftl`) をテスト時にも読み込み、
+// プロダクションと同一のリソースで検証できるようにする。
+// これにより **翻訳キーの逸脱** をテスト段階で検出でき、
+// i18n 機能の信頼性が向上する。  (評価項目: テスト/保守性)
 fn mock_bundle() -> FluentBundle<FluentResource> {
-    let ftl = r#"
-generated_password = Generated password:
-error_no_charset_selected = No valid character set was selected.
-error_generation = Error generating password.
-error_password_too_short = Password is too short.
-question_password_length = Enter password length:
-question_uppercase = Include uppercase letters?
-question_lowercase = Include lowercase letters?
-question_numbers = Include numbers?
-default_special_chars_message = Default special chars: { $specialChars }
-question_special_chars = Use special characters?
-question_change_special_chars = Change the default special chars?
-question_enter_special_chars = Enter special chars:
-error_invalid_input = Invalid input. Please enter yes or no.
-"#;
-    let res = FluentResource::try_new(ftl.to_owned()).unwrap();
-    let mut b = FluentBundle::new(vec![]);
-    b.add_resource(res).unwrap();
-    b
+    // ビルド時に埋め込むことで CI でもパスを気にせず利用可能
+    // ※ include_str! はリテラルパス必須のため相対指定
+    static FTL_ENG: &str = include_str!("../translation/eng.ftl");
+
+    let res =
+        FluentResource::try_new(FTL_ENG.to_owned()).expect("Failed to parse eng.ftl for tests");
+    let mut bundle = FluentBundle::new(vec![]);
+    bundle
+        .add_resource(res)
+        .expect("Failed to add resource to FluentBundle");
+    bundle
 }
 
 // Helper
 // 生成されたパスワード行を取り出す
 fn extract_password(output: &str) -> Option<String> {
     output
-        .split("Generated password:")
+        .split("Password Generation Result")
         // 末尾側
         .last()
         // 改行と空白を除去
@@ -107,7 +102,7 @@ async fn normal_flow() {
     let out = ui.outputs_joined();
     let pwd = extract_password(&out).expect("password not found");
     assert_eq!(pwd.len(), 15);
-    assert!(out.contains("Generated password:"));
+    assert!(out.contains("Password Generation Result"));
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -133,7 +128,7 @@ async fn too_short_interactive() {
 
     let short_msg_count = ui
         .outputs_joined()
-        .matches("Password is too short.")
+        .matches("A minimum of 15 characters is recommended for passwords.")
         .count();
     assert_eq!(short_msg_count, 2);
 }

@@ -167,8 +167,8 @@ pub async fn ask_user_yes_no(
 /// * `s`: パースする入力文字列。
 ///
 /// # Returns
-/// パースに成功した場合、対応するブール値を含む [`std::result::Result<bool, ()>`] を返します。
-/// 有効な yes/no 入力でない場合、エラー (`Err(())`) を返します。
+/// パースに成功した場合、対応するブール値を含む [`std::result::Result<bool, GenerationError>`] を返します。
+/// 有効な yes/no 入力でない場合、[`GenerationError::InvalidInput`] を含むエラーを返します。
 #[doc(alias = "parse")]
 #[doc(alias = "yes no")]
 pub fn parse_yes_no_input(s: &str) -> std::result::Result<bool, GenerationError> {

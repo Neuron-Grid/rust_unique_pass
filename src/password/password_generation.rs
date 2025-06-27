@@ -24,7 +24,7 @@ const MAX_GENERATION_ATTEMPTS: usize = 500000;
 const STRENGTH_CHECK_INTERVAL: usize = 10;
 
 /// # Overview
-/// 指定された文字セットと長さに基づいて、安全なパスワードを生成します（同期版）。
+/// 指定された文字セットと長さに基づいて、安全なパスワードを生成します。
 ///
 /// # Arguments
 /// * `all_vec`: パスワードに使用可能な全ての文字を含むスライス。
@@ -110,7 +110,7 @@ pub async fn assemble_random_password(
 
 /// # Overview
 /// 指定されたパスワードが十分に強力であるかを確認します。
-/// zxcvbn ライブラリを使用してパスワードの強度を評価します。
+/// `zxcvbn` ライブラリを使用してパスワードの強度を評価し、最高評価であるスコア4に達した場合にのみ `true` を返します。
 ///
 /// # Arguments
 /// * `pwd`: 評価するパスワード文字列。

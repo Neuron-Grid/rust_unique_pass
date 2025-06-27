@@ -18,9 +18,9 @@ limitations under the License. */
 use crate::core::app_errors::Result as AppResult;
 use hkdf::Hkdf;
 use rand::{CryptoRng, RngCore, SeedableRng};
-/// # Secure RNG (CSPRNG) モジュール
-/// 本モジュールはNIST SP 800-90Aに準拠した暗号学的擬似乱数生成器（CSPRNG）を提供します。
-/// - OSエントロピーソースとタイミングエントロピーの混入
+/// CSPRNGモジュール
+/// 本モジュールはNIST SP 800-90Aに準拠した暗号学的擬似乱数生成器(CSPRNG)を提供します。
+/// - OSエントロピーソースの利用
 /// - シンプルな再シード
 /// - スレッドセーフ設計
 /// ## セキュリティ設計方針
@@ -28,13 +28,19 @@ use rand_chacha::ChaCha20Rng;
 use sha2::Sha256;
 use std::sync::Mutex;
 
+/// HKDFの`info`パラメータに使用する定数
+/// NIST SP 800-56C 推奨の「ドメイン分離」を実現し、
+/// 他アプリケーションで同一シードが使われても乱数列が衝突しないようにする。
+const HKDF_INFO: &[u8] = b"rust_unique_pass-v1-seed";
+
 /// HMAC-SHA256ベースのHKDFによるseed拡張
+/// `info`にアプリケーション固有文字列[`HKDF_INFO`]を渡し、ドメイン分離を強化する。
+/// 失敗時には`expect`で即座にアボートし、質の低いseedでRngが初期化されないようにする。
 fn hkdf_expand(seed: &[u8; 32]) -> [u8; 32] {
-    // NIST SP 800-56Cに準拠したHKDF（HMAC-SHA256）
-    // infoやsaltは用途に応じて調整可能だが、ここでは空で運用
+    // NIST SP 800-56C に準拠した HKDF（HMAC-SHA256）
     let hk = Hkdf::<Sha256>::new(None, seed);
     let mut okm = [0u8; 32];
-    hk.expand(&[], &mut okm).expect("HKDF expand failed");
+    hk.expand(HKDF_INFO, &mut okm).expect("HKDF expand failed");
     okm
 }
 
@@ -47,7 +53,7 @@ pub struct SecureRng {
 impl SecureRng {
     /// 新しいSecureRngインスタンスを作成
     /// # セキュリティ
-    /// - OSのエントロピーソースとタイミングエントロピーを混入
+    /// - OSのエントロピーソースを利用
 
     /// - シード値はZeroizingで自動消去
     pub fn new() -> AppResult<Self> {
@@ -73,7 +79,8 @@ impl SecureRng {
         Ok(())
     }
 
-    /// 再シード（必要な場合のみ手動で呼び出し）
+    /// 再シード
+    /// 必要な場合のみ手動で呼び出し
     pub fn reseed(&self) -> AppResult<()> {
         let seed: [u8; 32] = rand::random();
         let hkdf_seed = hkdf_expand(&seed);
@@ -101,6 +108,15 @@ impl RngCore for SecureRng {
         u64::from_le_bytes(bytes)
     }
 
+    /// RNG 生成バイトの低レベル API
+    /// 内部で[`generate_bytes`]を呼び出し、失敗時は
+    /// エラー内容を標準エラー出力に記録し
+    /// `dest`全体を安全なゼロ埋めで初期化する。
+    /// パニックによるクラッシュを避けつつ、危険な乱数列が
+    /// 流出しない “セーフデフォルト” 動作を提供する。
+    /// ライブラリ利用者向け注意
+    /// この関数は失敗を返さないため、呼び出し後に戻り値が高品質ランダムであることを保証したい場合は
+    /// 事前に[`generate_bytes`]を直接呼び出して結果を確認すること。
     fn fill_bytes(&mut self, dest: &mut [u8]) {
         if let Err(e) = self.generate_bytes(dest) {
             eprintln!("Critical RNG failure in fill_bytes: {}", e);

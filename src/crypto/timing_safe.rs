@@ -151,7 +151,12 @@ impl TimingSafeOps {
 }
 
 impl TimingSafeOps {
-    /// 定時間文字列連結
+    /// 文字列を連結します。
+    ///
+    /// # 注意
+    /// この関数は、入力文字列の長さに比例した時間で実行されます（O(n)）。
+    /// UTF-8の可変長文字エンコーディングの性質上、真の定時間での文字列操作は非常に複雑です。
+    /// この関数はタイミング攻撃に対する耐性を提供しないため、セキュリティクリティカルな文脈での使用には注意が必要です。
     pub fn constant_time_concat(s1: &str, s2: &str, max_len: usize) -> String {
         let mut result = String::with_capacity(max_len);
         let combined = format!("{}{}", s1, s2);
