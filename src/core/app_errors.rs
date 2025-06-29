@@ -46,6 +46,9 @@ pub enum GenerationError {
     /// 連続した入力エラーが発生した場合に発生します。
     #[error("Input failure: {0}")]
     InputFailure(String),
+    /// OSからのエントロピー取得に失敗した場合に発生します。
+    #[error("Failed to gather entropy from the operating system.")]
+    EntropyError(#[from] getrandom::Error),
 }
 
 /// # Overview

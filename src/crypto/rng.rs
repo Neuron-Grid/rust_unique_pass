@@ -18,6 +18,7 @@ limitations under the License. */
 use crate::core::app_errors::Result as AppResult;
 use hkdf::Hkdf;
 use rand::{CryptoRng, RngCore, SeedableRng};
+use getrandom;
 /// CSPRNGモジュール
 /// 本モジュールはNIST SP 800-90Aに準拠した暗号学的擬似乱数生成器(CSPRNG)を提供します。
 /// - OSエントロピーソースの利用
@@ -57,7 +58,8 @@ impl SecureRng {
 
     /// - シード値はZeroizingで自動消去
     pub fn new() -> AppResult<Self> {
-        let seed: [u8; 32] = rand::random();
+        let mut seed = [0u8; 32];
+        getrandom::fill(&mut seed)?;
         let hkdf_seed = hkdf_expand(&seed);
         let rng = ChaCha20Rng::from_seed(hkdf_seed);
         Ok(Self {
@@ -82,7 +84,8 @@ impl SecureRng {
     /// 再シード
     /// 必要な場合のみ手動で呼び出し
     pub fn reseed(&self) -> AppResult<()> {
-        let seed: [u8; 32] = rand::random();
+        let mut seed = [0u8; 32];
+        getrandom::fill(&mut seed)?;
         let hkdf_seed = hkdf_expand(&seed);
         let mut rng = self.rng.lock().map_err(|e| {
             crate::core::app_errors::GenerationError::IoError(std::io::Error::new(

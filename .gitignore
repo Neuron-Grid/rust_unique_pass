@@ -73,3 +73,5 @@ rust-project.json
 # End of https://www.toptal.com/developers/gitignore/api/macos,linux,rust,rust-analyzer
 
 .claude
+.env
+.mcp.json
