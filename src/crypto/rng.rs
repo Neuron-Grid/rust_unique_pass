@@ -19,6 +19,7 @@ use crate::core::app_errors::Result as AppResult;
 use hkdf::Hkdf;
 use rand::{CryptoRng, RngCore, SeedableRng};
 use getrandom;
+use zeroize::Zeroizing;
 /// CSPRNGモジュール
 /// 本モジュールはNIST SP 800-90Aに準拠した暗号学的擬似乱数生成器(CSPRNG)を提供します。
 /// - OSエントロピーソースの利用
@@ -36,13 +37,18 @@ const HKDF_INFO: &[u8] = b"rust_unique_pass-v1-seed";
 
 /// HMAC-SHA256ベースのHKDFによるseed拡張
 /// `info`にアプリケーション固有文字列[`HKDF_INFO`]を渡し、ドメイン分離を強化する。
-/// 失敗時には`expect`で即座にアボートし、質の低いseedでRngが初期化されないようにする。
-fn hkdf_expand(seed: &[u8; 32]) -> [u8; 32] {
+/// 失敗時にはErrorを返し、適切なエラーハンドリングを可能にする。
+fn hkdf_expand(seed: &[u8; 32]) -> AppResult<Zeroizing<[u8; 32]>> {
     // NIST SP 800-56C に準拠した HKDF（HMAC-SHA256）
     let hk = Hkdf::<Sha256>::new(None, seed);
-    let mut okm = [0u8; 32];
-    hk.expand(HKDF_INFO, &mut okm).expect("HKDF expand failed");
-    okm
+    let mut okm = Zeroizing::new([0u8; 32]);
+    hk.expand(HKDF_INFO, okm.as_mut()).map_err(|_| {
+        crate::core::app_errors::GenerationError::IoError(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "HKDF expand failed",
+        ))
+    })?;
+    Ok(okm)
 }
 
 /// NIST SP 800-90A準拠のCSPRNG実装
@@ -55,13 +61,12 @@ impl SecureRng {
     /// 新しいSecureRngインスタンスを作成
     /// # セキュリティ
     /// - OSのエントロピーソースを利用
-
     /// - シード値はZeroizingで自動消去
     pub fn new() -> AppResult<Self> {
-        let mut seed = [0u8; 32];
-        getrandom::fill(&mut seed)?;
-        let hkdf_seed = hkdf_expand(&seed);
-        let rng = ChaCha20Rng::from_seed(hkdf_seed);
+        let mut seed = Zeroizing::new([0u8; 32]);
+        getrandom::fill(seed.as_mut())?;
+        let hkdf_seed = hkdf_expand(&seed)?;
+        let rng = ChaCha20Rng::from_seed(*hkdf_seed);
         Ok(Self {
             rng: Mutex::new(rng),
         })
@@ -84,16 +89,16 @@ impl SecureRng {
     /// 再シード
     /// 必要な場合のみ手動で呼び出し
     pub fn reseed(&self) -> AppResult<()> {
-        let mut seed = [0u8; 32];
-        getrandom::fill(&mut seed)?;
-        let hkdf_seed = hkdf_expand(&seed);
+        let mut seed = Zeroizing::new([0u8; 32]);
+        getrandom::fill(seed.as_mut())?;
+        let hkdf_seed = hkdf_expand(&seed)?;
         let mut rng = self.rng.lock().map_err(|e| {
             crate::core::app_errors::GenerationError::IoError(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 format!("RNG mutex poisoned: {}", e),
             ))
         })?;
-        *rng = ChaCha20Rng::from_seed(hkdf_seed);
+        *rng = ChaCha20Rng::from_seed(*hkdf_seed);
         Ok(())
     }
 }
