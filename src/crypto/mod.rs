@@ -12,12 +12,14 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+pub mod global_rng;
 /// 暗号学的セキュリティモジュール
 pub mod rng;
 pub mod secure_memory;
 pub mod timing_safe;
 pub mod zxcvbn_wrapper;
-pub use rng::SecureRng;
+pub use global_rng::{GlobalRngStatistics, get_global_rng};
+pub use rng::{RngStatistics, SecureRng};
 pub use secure_memory::{SecureMemory, SecureString};
 pub use timing_safe::TimingSafeOps;
 
