@@ -15,6 +15,7 @@ limitations under the License. */
 use crate::core::app_errors::{GenerationError, Result};
 use crate::crypto::global_rng::get_global_rng;
 use crate::password::password_length::validate_password_length;
+use std::convert::TryInto;
 use zeroize::Zeroizing;
 use zxcvbn::{Score, zxcvbn};
 
@@ -89,8 +90,10 @@ pub async fn assemble_random_password(
     };
 
     // 乱数バッファ準備
-    // 効率的な乱数生成
-    let mut random_bytes = vec![0u8; len * 4];
+    // secure_random_index は 8 バイト単位で消費し、
+    // リジェクションが発生すると追加でバイトを消費する。
+    // 予備を十分に確保してバッファ枯渇による None を防ぐ。
+    let mut random_bytes = vec![0u8; len * 16]; // 以前: len*4
     if global_rng.generate_bytes(&mut random_bytes).is_err() {
         return None;
     }
@@ -148,26 +151,35 @@ impl<'a> BytesToIndexAdapter<'a> {
     }
 
     fn next_index(&mut self, max: usize) -> Option<usize> {
-        if max == 0 || self.position >= self.bytes.len() {
+        if max == 0 {
             return None;
         }
 
-        let byte = self.bytes[self.position];
-        self.position += 1;
+        // 2 の累乗に切り上げたマスクを計算
+        let mask = max.next_power_of_two().saturating_sub(1);
 
-        // 偏りの少ない変換（rejection sampling の簡易版）
-        if max <= 256 {
-            Some((byte as usize) % max)
-        } else {
-            // 大きな範囲の場合は複数バイトを使用
-            if self.position < self.bytes.len() {
-                let byte2 = self.bytes[self.position];
+        loop {
+            // 可能な限り usize 長 (8バイト) をまとめて読み取る
+            let value: usize = if self.position + std::mem::size_of::<usize>() <= self.bytes.len() {
+                let slice =
+                    &self.bytes[self.position..self.position + std::mem::size_of::<usize>()];
+                self.position += std::mem::size_of::<usize>();
+                usize::from_le_bytes(slice.try_into().expect("slice with incorrect length"))
+            } else if self.position < self.bytes.len() {
+                // 残バイトが 8 未満の場合は 1 バイトだけ使用
+                let byte = self.bytes[self.position];
                 self.position += 1;
-                let combined = ((byte as usize) << 8) | (byte2 as usize);
-                Some(combined % max)
+                byte as usize
             } else {
-                Some((byte as usize) % max)
+                // 乱数バイトを使い切った
+                return None;
+            };
+
+            let candidate = value & mask;
+            if candidate < max {
+                return Some(candidate);
             }
+            // candidate >= max の場合はリトライしてバイアスを排除
         }
     }
 }

@@ -220,13 +220,9 @@ impl RngCore for SecureRng {
     /// この関数は失敗を返さないため、呼び出し後に戻り値が高品質ランダムであることを保証したい場合は
     /// 事前に[`generate_bytes`]を直接呼び出して結果を確認すること。
     fn fill_bytes(&mut self, dest: &mut [u8]) {
-        if let Err(e) = self.generate_bytes(dest) {
-            eprintln!("Critical RNG failure in fill_bytes: {}", e);
-            // エラー時は全ゼロ埋め（panicせず安全なデフォルト動作）
-            for b in dest.iter_mut() {
-                *b = 0;
-            }
-        }
+        self.generate_bytes(dest).unwrap_or_else(|e| {
+            panic!("Critical RNG failure: {}", e);
+        });
     }
 }
 impl CryptoRng for SecureRng {}
