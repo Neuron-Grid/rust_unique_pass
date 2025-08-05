@@ -25,7 +25,7 @@ pub fn zxcvbn_entropy_score(password: &str) -> Result<(f64, u8), String> {
 
     let analysis = zxcvbn(password, &[]);
     let guesses_f = analysis.guesses() as f64;
-    let bits_of_entropy = guesses_f.log10() * 3.321928094887362;
+    let bits_of_entropy = guesses_f.log10() * std::f64::consts::LOG2_10;
     let score_u8: u8 = analysis.score().into();
     Ok((bits_of_entropy, score_u8))
 }

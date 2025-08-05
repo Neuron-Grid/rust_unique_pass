@@ -159,7 +159,7 @@ impl TimingSafeOps {
     /// この関数はタイミング攻撃に対する耐性を提供しないため、セキュリティクリティカルな文脈での使用には注意が必要です。
     pub fn constant_time_concat(s1: &str, s2: &str, max_len: usize) -> String {
         let mut result = String::with_capacity(max_len);
-        let combined = format!("{}{}", s1, s2);
+        let combined = format!("{s1}{s2}");
 
         // 常に最大長まで処理
         for i in 0..max_len {
@@ -183,7 +183,7 @@ impl TimingSafeOps {
     /// - Fisher-Yatesアルゴリズムを定時間・バイアスなしで実行
     /// - 各swap操作ごとにタイミングノイズを挿入
     /// - タイミング攻撃・バイアス攻撃を防止
-    pub fn secure_shuffle<T: Clone>(items: &mut Vec<T>, rng: &mut impl RngCore) {
+    pub fn secure_shuffle<T: Clone>(items: &mut [T], rng: &mut impl RngCore) {
         let len = items.len();
 
         for i in (1..len).rev() {

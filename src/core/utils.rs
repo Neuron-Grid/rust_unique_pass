@@ -88,18 +88,15 @@ where
             Err(e) => {
                 consecutive_failures += 1;
                 let retry_msg = format!(
-                    "Failed to read input (attempt {}/{}): {}",
-                    consecutive_failures, MAX_INPUT_FAILURES, e
+                    "Failed to read input (attempt {consecutive_failures}/{MAX_INPUT_FAILURES}): {e}"
                 );
 
                 if let Err(_e) = ui.print(&retry_msg).await {}
 
                 if consecutive_failures >= MAX_INPUT_FAILURES {
                     return Err(GenerationError::InputFailure(format!(
-                        "Consecutive input errors exceeded maximum attempts ({}). Last error: {}",
-                        MAX_INPUT_FAILURES, e
-                    ))
-                    .into());
+                        "Consecutive input errors exceeded maximum attempts ({MAX_INPUT_FAILURES}). Last error: {e}"
+                    )));
                 }
                 continue;
             }

@@ -46,8 +46,7 @@ fn hkdf_expand(seed: &[u8; 32]) -> AppResult<Zeroizing<[u8; 32]>> {
     let hk = Hkdf::<Sha256>::new(None, seed);
     let mut okm = Zeroizing::new([0u8; 32]);
     hk.expand(HKDF_INFO, okm.as_mut()).map_err(|_| {
-        crate::core::app_errors::GenerationError::IoError(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        crate::core::app_errors::GenerationError::IoError(std::io::Error::other(
             "HKDF expand failed",
         ))
     })?;
@@ -113,18 +112,16 @@ impl SecureRng {
 
         // 乱数生成
         let mut rng = self.rng.lock().map_err(|e| {
-            crate::core::app_errors::GenerationError::IoError(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("RNG mutex poisoned: {}", e),
+            crate::core::app_errors::GenerationError::IoError(std::io::Error::other(
+                format!("RNG mutex poisoned: {e}"),
             ))
         })?;
         rng.fill_bytes(dest);
 
         // 基本的な品質チェック（全ゼロでないことを確認）
-        if dest.len() > 0 && dest.iter().all(|&b| b == 0) {
+        if !dest.is_empty() && dest.iter().all(|&b| b == 0) {
             return Err(crate::core::app_errors::GenerationError::IoError(
-                std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                std::io::Error::other(
                     "Generated all-zero bytes - potential RNG failure",
                 ),
             ));
@@ -145,8 +142,7 @@ impl SecureRng {
         let current_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|_| {
-                crate::core::app_errors::GenerationError::IoError(std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                crate::core::app_errors::GenerationError::IoError(std::io::Error::other(
                     "Time error",
                 ))
             })?
@@ -166,9 +162,8 @@ impl SecureRng {
         let hkdf_seed = hkdf_expand(&seed)?;
 
         let mut rng = self.rng.lock().map_err(|e| {
-            crate::core::app_errors::GenerationError::IoError(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("RNG mutex poisoned: {}", e),
+            crate::core::app_errors::GenerationError::IoError(std::io::Error::other(
+                format!("RNG mutex poisoned: {e}"),
             ))
         })?;
         *rng = ChaCha20Rng::from_seed(*hkdf_seed);
@@ -221,7 +216,7 @@ impl RngCore for SecureRng {
     /// 事前に[`generate_bytes`]を直接呼び出して結果を確認すること。
     fn fill_bytes(&mut self, dest: &mut [u8]) {
         self.generate_bytes(dest).unwrap_or_else(|e| {
-            panic!("Critical RNG failure: {}", e);
+            panic!("Critical RNG failure: {e}");
         });
     }
 }

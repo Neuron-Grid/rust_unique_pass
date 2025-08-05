@@ -88,10 +88,10 @@ fn resolve_language(args: &RupassArgs) -> String {
 /// リソースのパースに失敗した場合、[`GenerationError::ResourceParseError`] を含む [`Result`] を返します。
 fn load_fluent_bundle(language: &str) -> Result<FluentBundle<FluentResource>> {
     let langid = map_to_fluent_code(language)?;
-    let resource_filename = format!("{}.ftl", langid);
+    let resource_filename = format!("{langid}.ftl");
 
     let ftl_string = get_embedded_resource(&resource_filename)
-        .ok_or_else(|| GenerationError::UnsupportedLanguage)?;
+        .ok_or(GenerationError::UnsupportedLanguage)?;
 
     let ftl_resource = FluentResource::try_new(ftl_string)
         .map_err(|_parse_errors| GenerationError::ResourceParseError)?;

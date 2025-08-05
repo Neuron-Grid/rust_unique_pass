@@ -150,8 +150,7 @@ impl<T> SecureMemory<T> {
             if let Err(e) = MemoryProtector::lock_memory(ptr as *mut u8, layout.size()) {
                 dealloc(ptr as *mut u8, layout);
                 return Err(CryptoError::MemoryError(format!(
-                    "Memory protection failed: {}",
-                    e
+                    "Memory protection failed: {e}"
                 )));
             }
 
@@ -159,7 +158,7 @@ impl<T> SecureMemory<T> {
             // コアダンプ除外など
             if let Err(e) = MemoryProtector::additional_protection(ptr as *mut u8, layout.size()) {
                 // 追加保護の失敗は警告レベル、続行可能
-                eprintln!("Warning: Additional memory protection failed: {}", e);
+                eprintln!("Warning: Additional memory protection failed: {e}");
             }
 
             ptr
@@ -189,7 +188,7 @@ impl<T> Drop for SecureMemory<T> {
             if let Err(e) = MemoryProtector::unlock_memory(self.ptr as *mut u8, self.layout.size())
             {
                 // ロック解除の失敗は警告レベル
-                eprintln!("Warning: Memory unlock failed: {}", e);
+                eprintln!("Warning: Memory unlock failed: {e}");
             }
 
             // メモリ解放

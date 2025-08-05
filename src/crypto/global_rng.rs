@@ -67,8 +67,7 @@ impl GlobalRng {
         let current_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|_| {
-                crate::core::app_errors::GenerationError::IoError(std::io::Error::new(
-                    std::io::ErrorKind::Other,
+                crate::core::app_errors::GenerationError::IoError(std::io::Error::other(
                     "Time error",
                 ))
             })?
@@ -126,15 +125,13 @@ pub fn get_global_rng() -> AppResult<Arc<GlobalRng>> {
     });
 
     let guard = GLOBAL_RNG.lock().map_err(|_| {
-        crate::core::app_errors::GenerationError::IoError(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        crate::core::app_errors::GenerationError::IoError(std::io::Error::other(
             "Global RNG mutex poisoned",
         ))
     })?;
 
     guard.clone().ok_or_else(|| {
-        crate::core::app_errors::GenerationError::IoError(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        crate::core::app_errors::GenerationError::IoError(std::io::Error::other(
             "Failed to initialize global RNG",
         ))
     })
