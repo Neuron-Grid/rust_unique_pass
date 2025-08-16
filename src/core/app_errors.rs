@@ -43,6 +43,9 @@ pub enum GenerationError {
     /// ユーザーとの対話がキャンセルされたか、無効な入力があった場合に発生します。
     #[error("Interaction cancelled or invalid input.")]
     InvalidInput,
+    /// 厳格モードで時間内に目標スコアに到達しなかった場合に発生します。
+    #[error("Strict target unmet within time budget")]
+    StrictTargetUnmet,
     /// 連続した入力エラーが発生した場合に発生します。
     #[error("Input failure: {0}")]
     InputFailure(String),

@@ -91,6 +91,12 @@ async fn normal_flow() {
         uppercase: true,
         lowercase: false,
         symbols: false,
+        timeout_ms: 150,
+        min_score: 4,
+        strict: false,
+        show_strength: false,
+        quiet: false,
+        max_attempts: 1_000_000,
     };
 
     // lowercase? → "n"だけ回答
@@ -115,6 +121,12 @@ async fn too_short_interactive() {
         uppercase: false,
         lowercase: false,
         symbols: false,
+        timeout_ms: 150,
+        min_score: 4,
+        strict: false,
+        show_strength: false,
+        quiet: false,
+        max_attempts: 1_000_000,
     };
 
     // ①10 → too short ②14 → too short ③15 → OK
@@ -143,6 +155,12 @@ async fn too_short_args() {
         uppercase: true,
         lowercase: true,
         symbols: false,
+        timeout_ms: 150,
+        min_score: 4,
+        strict: false,
+        show_strength: false,
+        quiet: false,
+        max_attempts: 1_000_000,
     };
     let mut ui = MockUI::default();
     let err = generate_password_flow(&mut ui, &mock_bundle(), &args)
@@ -160,6 +178,12 @@ async fn no_charset() {
         uppercase: false,
         lowercase: false,
         symbols: false,
+        timeout_ms: 150,
+        min_score: 4,
+        strict: false,
+        show_strength: false,
+        quiet: false,
+        max_attempts: 1_000_000,
     };
     // uppercase? n / lowercase? n / numbers? n / symbols? n
     let mut ui = MockUI::new(vec!["n", "n", "n", "n"]);
@@ -178,6 +202,12 @@ async fn custom_symbols() {
         uppercase: true,
         lowercase: true,
         symbols: false,
+        timeout_ms: 150,
+        min_score: 4,
+        strict: false,
+        show_strength: false,
+        quiet: false,
+        max_attempts: 1_000_000,
     };
     // symbols? y → change? y → enter custom set
     let mut ui = MockUI::new(vec!["y", "y", "!?@#$%^&*()"]);

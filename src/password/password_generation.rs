@@ -14,13 +14,126 @@ limitations under the License. */
 
 use crate::core::app_errors::{GenerationError, Result};
 use crate::crypto::global_rng::get_global_rng;
+use crate::crypto::zxcvbn_wrapper::zxcvbn_entropy_score;
 use crate::password::password_length::validate_password_length;
 use std::convert::TryInto;
+use std::time::{Duration, Instant};
 use zeroize::Zeroizing;
 use zxcvbn::{Score, zxcvbn};
 
 const MAX_GENERATION_ATTEMPTS: usize = 500000;
 const STRENGTH_CHECK_INTERVAL: usize = 10;
+
+/// N回に1回だけ`Instant::now()`を評価するための間引き係数
+const NOW_CHECK_INTERVAL: u64 = 32;
+
+/// 時間予算による生成結果
+pub struct GenerationOutcome {
+    pub password: Zeroizing<String>,
+    pub score: u8,
+    pub entropy_bits: f64,
+    pub reached_target: bool,
+}
+
+/// 強度評価抽象化トレイト
+pub trait PasswordStrengthEvaluator {
+    fn score_entropy(&self, pwd: &str) -> (u8, f64);
+}
+
+/// 実装: zxcvbn を用いた評価器
+pub struct ZxcvbnEvaluator;
+
+impl PasswordStrengthEvaluator for ZxcvbnEvaluator {
+    fn score_entropy(&self, pwd: &str) -> (u8, f64) {
+        match zxcvbn_entropy_score(pwd) {
+            Ok((bits, score)) => (score, bits),
+            Err(_e) => (0, 0.0),
+        }
+    }
+}
+
+/// # Overview
+/// 指定の時間予算と最大試行回数の範囲で、zxcvbnスコア/エントロピーに基づいて
+/// パスワードを探索します。`min_score` 到達で早期終了します。
+pub async fn produce_password_within_time(
+    all_vec: &[char],
+    req: &[Vec<char>],
+    len: usize,
+    timeout_ms: u64,
+    min_score: u8,
+    strict: bool,
+    max_attempts: u64,
+) -> Result<GenerationOutcome> {
+    validate_password_length(len)?;
+    if all_vec.is_empty() {
+        return Err(GenerationError::GenerationFailed);
+    }
+    if req.len() > len {
+        return Err(GenerationError::InvalidLength);
+    }
+
+    let evaluator = ZxcvbnEvaluator;
+    let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+    let mut attempts: u64 = 0;
+    let mut best_pwd: Option<Zeroizing<String>> = None;
+    let mut best_score: u8 = 0;
+    let mut best_bits: f64 = 0.0;
+
+    while attempts < max_attempts {
+        attempts += 1;
+
+        if let Some(candidate) = assemble_random_password(all_vec, len, req).await {
+            if candidate.len() != len { continue; }
+            // 軽量フィルタ: ごく弱い候補をスキップ
+            if candidate.len() < 8 {
+                // drop candidate
+            } else if candidate.chars().all(|c| c == candidate.chars().next().unwrap_or('\0')) {
+                // 全て同一文字
+            } else {
+                let (score, bits) = evaluator.score_entropy(&candidate);
+
+                // ベスト更新ルール: スコア優先、同点ならエントロピー優先
+                if score > best_score || (score == best_score && bits > best_bits) {
+                    best_score = score;
+                    best_bits = bits;
+                    best_pwd = Some(Zeroizing::new(candidate.clone()));
+                }
+
+                if score >= min_score {
+                    let pwd = Zeroizing::new(candidate);
+                    return Ok(GenerationOutcome {
+                        password: pwd,
+                        score,
+                        entropy_bits: bits,
+                        reached_target: true,
+                    });
+                }
+            }
+        }
+
+        // 時間チェック（間引き）
+        if attempts % NOW_CHECK_INTERVAL == 0 {
+            if Instant::now() >= deadline {
+                break;
+            }
+        }
+    }
+
+    // 期限切れ/回数到達
+    if let Some(pwd) = best_pwd {
+        if strict && best_score < min_score {
+            return Err(GenerationError::StrictTargetUnmet);
+        }
+        return Ok(GenerationOutcome {
+            password: pwd,
+            score: best_score,
+            entropy_bits: best_bits,
+            reached_target: false,
+        });
+    }
+
+    Err(GenerationError::GenerationFailed)
+}
 
 /// # Overview
 /// 指定された文字セットと長さに基づいて、安全なパスワードを生成します。
@@ -205,4 +318,97 @@ fn is_strong(pwd: &str) -> bool {
     }
 
     zxcvbn(pwd, &[]).score() == Score::Four
+}
+
+// テスト用補助: 外部RNG差し替えや決定性テストを可能にする
+#[cfg(test)]
+pub mod test_helpers {
+    use super::*;
+    use rand::RngCore;
+
+    pub fn assemble_random_password_with_rng(
+        rng: &mut impl RngCore,
+        all_vec: &[char],
+        len: usize,
+        req: &[Vec<char>],
+    ) -> Option<String> {
+        if all_vec.is_empty() {
+            return None;
+        }
+
+        let mut random_bytes = vec![0u8; len * 16];
+        rng.fill_bytes(&mut random_bytes);
+        let mut rng_adapter = BytesToIndexAdapter::new(&random_bytes);
+
+        let need: Vec<char> = req
+            .iter()
+            .filter_map(|set| {
+                if set.is_empty() {
+                    return None;
+                }
+                let index = rng_adapter.next_index(set.len())?;
+                set.get(index).copied()
+            })
+            .collect();
+
+        if need.len() > len {
+            return None;
+        }
+        let rest = len - need.len();
+        let mut pwd: Vec<char> = need;
+        for _ in 0..rest {
+            if let Some(index) = rng_adapter.next_index(all_vec.len()) {
+                if let Some(&ch) = all_vec.get(index) {
+                    pwd.push(ch);
+                }
+            }
+        }
+        for i in (1..pwd.len()).rev() {
+            if let Some(j) = rng_adapter.next_index(i + 1) {
+                pwd.swap(i, j);
+            }
+        }
+        Some(pwd.iter().collect())
+    }
+
+    /// テスト用: 時間依存を避け、決定論的に評価関数/乱数で検証
+    pub fn produce_password_within_time_test(
+        all_vec: &[char],
+        req: &[Vec<char>],
+        len: usize,
+        min_score: u8,
+        evaluator: &impl PasswordStrengthEvaluator,
+        rng: &mut impl RngCore,
+        max_attempts: u64,
+    ) -> Option<(String, u8, f64, bool)> {
+        // 時間制約は無視し、max_attempts まで探索
+        let mut attempts: u64 = 0;
+        let mut best_pwd: Option<String> = None;
+        let mut best_score: u8 = 0;
+        let mut best_bits: f64 = 0.0;
+
+        while attempts < max_attempts {
+            attempts += 1;
+            if let Some(candidate) = assemble_random_password_with_rng(rng, all_vec, len, req) {
+                if candidate.len() != len { continue; }
+                if candidate.len() < 8 {
+                    continue;
+                }
+                if candidate.chars().all(|c| c == candidate.chars().next().unwrap_or('\0')) {
+                    continue;
+                }
+                let (score, bits) = evaluator.score_entropy(&candidate);
+                if score >= min_score {
+                    return Some((candidate, score, bits, true));
+                }
+                if score > best_score || (score == best_score && bits > best_bits) {
+                    best_score = score;
+                    best_bits = bits;
+                    best_pwd = Some(candidate);
+                }
+            }
+        }
+
+        best_pwd.map(|pwd| (pwd, best_score, best_bits, false))
+    }
 }

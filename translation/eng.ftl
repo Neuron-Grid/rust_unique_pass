@@ -31,3 +31,8 @@ default_special_chars_message = "The special characters used by default are: { $
 
 # Other messages
 generated_password = "Password Generation Result"
+
+# New messages for time-budgeted strength search
+warning_best_effort_used = "Warning: Could not reach target score { $targetScore } within { $budgetMs } ms. Using best candidate: score { $bestScore } ({ $entropyBits } bits)."
+error_target_unmet_strict = "Error: Could not reach target score { $targetScore } within { $budgetMs } ms."
+info_strength_line = "Strength: { $score }/4 (entropy: { $entropyBits } bits)"

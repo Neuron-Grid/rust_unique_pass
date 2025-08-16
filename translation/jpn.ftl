@@ -32,3 +32,8 @@ default_special_chars_message = "デフォルトで使用される特殊文字�
 
 # その他
 generated_password = "パスワードが生成されました。"
+
+# 新規: 時間予算ベース探索のメッセージ
+warning_best_effort_used = "警告: 目標スコア { $targetScore } に { $budgetMs } ms 以内に到達できませんでした。最良候補を使用します: スコア { $bestScore } ({ $entropyBits } bits)。"
+error_target_unmet_strict = "エラー: { $budgetMs } ms 以内に目標スコア { $targetScore } に到達できませんでした。"
+info_strength_line = "強度: { $score }/4 (エントロピー: { $entropyBits } bits)"

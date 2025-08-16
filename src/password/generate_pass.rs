@@ -17,7 +17,8 @@ use crate::cli::UserInterface;
 use crate::core::app_errors::Result;
 use crate::core::utils::fallback_translation;
 use crate::password::character_set::assemble_character_set;
-use crate::password::password_generation::produce_secure_password;
+use crate::password::password_generation::produce_password_within_time;
+use crate::core::app_errors::GenerationError;
 use crate::password::password_length::get_password_length;
 use fluent::{FluentBundle, FluentResource};
 
@@ -56,11 +57,111 @@ pub async fn generate_password_flow(
     let all_vec: Vec<char> = all_chars.chars().collect();
     let req_vec: Vec<Vec<char>> = req_sets.iter().map(|s| s.chars().collect()).collect();
 
-    let pwd = produce_secure_password(&all_vec, length, &req_vec).await?;
-    let output_msg = format!("{gen_msg}\n{}\n", pwd.as_str());
-    ui.print(&output_msg).await?;
+    // min-score が 0/1 の場合は弱さを警告（stderr）。quiet時は抑制
+    if (args.min_score == 0 || args.min_score == 1) && !args.quiet {
+        eprintln!(
+            "Warning: very weak target score {} requested (0/1)",
+            args.min_score
+        );
+    }
 
-    // スコープ離脱で自動zeroize
-    drop(pwd);
-    Ok(())
+    let outcome = produce_password_within_time(
+        &all_vec,
+        &req_vec,
+        length,
+        args.timeout_ms,
+        args.min_score,
+        args.strict,
+        args.max_attempts,
+    )
+    .await;
+
+    match outcome {
+        Ok(res) => {
+            // 通常出力
+            if args.quiet {
+                // パスワードのみ（stdout）。警告は抑制
+                ui.print(res.password.as_str()).await?;
+            } else {
+                // 見出し + パスワード
+                let output_msg = format!("{gen_msg}\n{}\n", res.password.as_str());
+                ui.print(&output_msg).await?;
+
+                // --show-strength 指定時のみ強度行を stdout に追加
+                if args.show_strength {
+                    use fluent::FluentArgs;
+                    let mut fargs = FluentArgs::new();
+                    fargs.set("score", res.score as i64);
+                    let entropy_str = format!("{:.1}", res.entropy_bits);
+                    fargs.set("entropyBits", entropy_str.as_str());
+                    let strength_line = crate::core::utils::fallback_translation(
+                        bundle,
+                        "info_strength_line",
+                        &format!(
+                            "Strength: {}/4 (entropy: {:.1} bits)",
+                            res.score, res.entropy_bits
+                        ),
+                        Some(&fargs),
+                    );
+                    ui.print(&strength_line).await?;
+                }
+
+                // 目標未達かつ非strictの場合のみ警告（stderr）
+                if !res.reached_target && !args.strict {
+                    use fluent::FluentArgs;
+                    let mut wargs = FluentArgs::new();
+                    wargs.set("targetScore", args.min_score as i64);
+                    wargs.set("budgetMs", args.timeout_ms as i64);
+                    wargs.set("bestScore", res.score as i64);
+                    let entropy_str = format!("{:.1}", res.entropy_bits);
+                    wargs.set("entropyBits", entropy_str.as_str());
+                    let warn_msg = crate::core::utils::fallback_translation(
+                        bundle,
+                        "warning_best_effort_used",
+                        &format!(
+                            "Warning: Could not reach target score {} within {} ms. Using best candidate: score {} ({} bits).",
+                            args.min_score, args.timeout_ms, res.score, entropy_str
+                        ),
+                        Some(&wargs),
+                    );
+                    eprintln!("{}", warn_msg);
+                }
+            }
+
+            // スコープ離脱で自動zeroize
+            drop(res);
+            Ok(())
+        }
+        Err(e) => {
+            // strict 未達等のエラー処理（stderr）
+            match e {
+                GenerationError::StrictTargetUnmet => {
+                    if !args.quiet {
+                        use fluent::FluentArgs;
+                        let mut eargs = FluentArgs::new();
+                        eargs.set("targetScore", args.min_score as i64);
+                        eargs.set("budgetMs", args.timeout_ms as i64);
+                        let err_msg = crate::core::utils::fallback_translation(
+                            bundle,
+                            "error_target_unmet_strict",
+                            &format!(
+                                "Error: Could not reach target score {} within {} ms.",
+                                args.min_score, args.timeout_ms
+                            ),
+                            Some(&eargs),
+                        );
+                        eprintln!("{}", err_msg);
+                    } else {
+                        // quietでもエラーは stderr に出す
+                        eprintln!(
+                            "Error: Could not reach target score {} within {} ms.",
+                            args.min_score, args.timeout_ms
+                        );
+                    }
+                    Err(GenerationError::StrictTargetUnmet)
+                }
+                other => Err(other),
+            }
+        }
+    }
 }

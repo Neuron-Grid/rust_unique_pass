@@ -26,14 +26,20 @@ is `rupass`.
 
 `rupass` provides several command-line options to control password generation.
 
-| Option (Short) | Option (Long)       | Description                                                            |
-| :------------- | :------------------ | :--------------------------------------------------------------------- |
-| `-l`           | `--language`        | Specifies the language for prompts and messages. (`jpn`, `eng`, `deu`) |
-| `-p`           | `--password-length` | Specifies the length of the password to be generated.                  |
-| `-n`           | `--numbers`         | Include numbers in the password.                                       |
-| `-u`           | `--uppercase`       | Include uppercase letters in the password.                             |
-| `-w`           | `--lowercase`       | Include lowercase letters in the password.                             |
-| `-s`           | `--symbols`         | Include symbols in the password.                                       |
+| Option (Short) | Option (Long)       | Description                                                                                   |
+| :------------- | :------------------ | :-------------------------------------------------------------------------------------------- |
+| `-l`           | `--language`        | Specifies the language for prompts and messages. (`jpn`, `eng`, `deu`)                        |
+| `-p`           | `--password-length` | Specifies the length of the password to be generated.                                         |
+| `-n`           | `--numbers`         | Include numbers in the password.                                                              |
+| `-u`           | `--uppercase`       | Include uppercase letters in the password.                                                    |
+| `-w`           | `--lowercase`       | Include lowercase letters in the password.                                                    |
+| `-s`           | `--symbols`         | Include symbols in the password.                                                              |
+|                | `--timeout-ms`      | Time budget for strength search in milliseconds (alias: `--budget-ms`). Default: `150` (>=10) |
+|                | `--min-score`       | Early-stop target score (0..=4). Default: `4`                                                 |
+|                | `--strict`          | Strict mode. Fail (exit 3) if target score not reached within budget                          |
+|                | `--show-strength`   | Show strength line (score and entropy) on success                                             |
+|                | `--quiet`           | Quiet/porcelain mode. Only print the password to stdout; suppress headings and warnings       |
+|                | `--max-attempts`    | Safety guard: maximum attempts before giving up. Default: `1,000,000`                         |
 
 **Command Examples:**
 
@@ -46,6 +52,13 @@ is `rupass`.
   ```zsh
   rupass -l jpn
   ```
+
+### Time-budgeted strength search
+
+- By default, the generator searches up to 150 ms for a candidate that reaches zxcvbn score 4.
+- It stops early as soon as the target score is reached. If not reached within the budget, it uses the best candidate and prints a warning to stderr (unless `--strict` or `--quiet`).
+- Use `--show-strength` to print a strength line like `Strength: 4/4 (entropy: 82.3 bits)`.
+- In `--strict` mode, the program exits with code 3 if the target score is not met within the budget and does not print the password.
 
 ## About Language Settings
 

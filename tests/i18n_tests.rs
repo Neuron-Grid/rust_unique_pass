@@ -48,6 +48,12 @@ fn test_initialize_bundle_unsupported_language() {
         uppercase: false,
         lowercase: false,
         symbols: false,
+        timeout_ms: 150,
+        min_score: 4,
+        strict: false,
+        show_strength: false,
+        quiet: false,
+        max_attempts: 1_000_000,
     };
     let result = initialize_bundle(&args);
     assert!(matches!(result, Err(GenerationError::UnsupportedLanguage)));
@@ -63,6 +69,12 @@ fn test_get_translation_missing_key() {
         uppercase: false,
         lowercase: false,
         symbols: false,
+        timeout_ms: 150,
+        min_score: 4,
+        strict: false,
+        show_strength: false,
+        quiet: false,
+        max_attempts: 1_000_000,
     };
     // デフォルト言語(eng)でロード
     let bundle = initialize_bundle(&args).expect("Should load default eng resource");
@@ -80,6 +92,12 @@ fn test_get_translation_with_args() {
         uppercase: false,
         lowercase: false,
         symbols: false,
+        timeout_ms: 150,
+        min_score: 4,
+        strict: false,
+        show_strength: false,
+        quiet: false,
+        max_attempts: 1_000_000,
     };
     let bundle = initialize_bundle(&args).expect("Should load default eng resource");
 
@@ -114,6 +132,12 @@ fn test_initialize_bundle_jpn() {
         uppercase: false,
         lowercase: false,
         symbols: false,
+        timeout_ms: 150,
+        min_score: 4,
+        strict: false,
+        show_strength: false,
+        quiet: false,
+        max_attempts: 1_000_000,
     };
 
     // jpn.ftl がちゃんと埋め込まれていればロードできるはず
@@ -141,6 +165,12 @@ fn test_jpn_translation_error_message() {
         uppercase: false,
         lowercase: false,
         symbols: false,
+        timeout_ms: 150,
+        min_score: 4,
+        strict: false,
+        show_strength: false,
+        quiet: false,
+        max_attempts: 1_000_000,
     };
 
     let bundle = initialize_bundle(&args).expect("Failed to load jpn resource");
@@ -163,6 +193,12 @@ fn test_compare_eng_and_jpn_translations() {
         uppercase: false,
         lowercase: false,
         symbols: false,
+        timeout_ms: 150,
+        min_score: 4,
+        strict: false,
+        show_strength: false,
+        quiet: false,
+        max_attempts: 1_000_000,
     };
     let jpn_args = RupassArgs {
         language: Some("jpn".to_string()),
@@ -171,6 +207,12 @@ fn test_compare_eng_and_jpn_translations() {
         uppercase: false,
         lowercase: false,
         symbols: false,
+        timeout_ms: 150,
+        min_score: 4,
+        strict: false,
+        show_strength: false,
+        quiet: false,
+        max_attempts: 1_000_000,
     };
 
     let eng_bundle = initialize_bundle(&eng_args).expect("Failed to load eng resource");
@@ -209,6 +251,12 @@ fn test_default_language_is_eng() {
         uppercase: false,
         lowercase: false,
         symbols: false,
+        timeout_ms: 150,
+        min_score: 4,
+        strict: false,
+        show_strength: false,
+        quiet: false,
+        max_attempts: 1_000_000,
     };
     let bundle =
         initialize_bundle(&args).expect("Should load default eng resource if none specified");
