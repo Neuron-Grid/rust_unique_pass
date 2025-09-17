@@ -102,7 +102,8 @@ impl UserInterface for StdioInterface {
 
         let mut line = String::new();
         self.reader.read_line(&mut line).await?;
-        Ok(line.trim().to_owned())
+        let line = line.trim_end_matches(&['\r', '\n'][..]).to_owned();
+        Ok(line)
     }
 
     /// # Overview

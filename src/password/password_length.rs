@@ -15,6 +15,7 @@ limitations under the License. */
 use crate::cli::RupassArgs;
 use crate::cli::UserInterface;
 use crate::core::app_errors::{GenerationError, Result};
+use crate::crypto::zxcvbn_wrapper::MAX_PASSWORD_LENGTH;
 use fluent::FluentBundle;
 use fluent::FluentResource;
 use futures::FutureExt;
@@ -73,7 +74,7 @@ pub async fn get_password_length(
 
 /// # Overview
 /// 指定されたパスワード長が有効であるかを検証します。
-/// 現在は15文字未満の長さを無効としています。
+/// 現在は15文字未満、または[`MAX_PASSWORD_LENGTH`]（zxcvbnの制約）を超える長さを無効としています。
 ///
 /// # Arguments
 /// * `len`: 検証するパスワード長。
@@ -82,11 +83,12 @@ pub async fn get_password_length(
 /// パスワード長が有効な場合、`Ok(())` を返します。
 ///
 /// # Errors
-/// パスワード長が15文字未満の場合、[`GenerationError::InvalidLength`] を含む [`Result`] を返します。
+/// パスワード長が15文字未満、もしくは [`MAX_PASSWORD_LENGTH`] を超える場合、
+/// [`GenerationError::InvalidLength`] を含む [`Result`] を返します。
 #[doc(alias = "validate")]
 #[doc(alias = "length validation")]
 pub fn validate_password_length(len: usize) -> Result<()> {
-    if len < 15 {
+    if len < 15 || len > MAX_PASSWORD_LENGTH {
         Err(GenerationError::InvalidLength)
     } else {
         Ok(())

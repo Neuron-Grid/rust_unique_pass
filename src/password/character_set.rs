@@ -233,7 +233,7 @@ async fn ask_special_chars(
         );
         let inp = ui.prompt(&enter_msg).await?;
         // ユーザー入力の特殊文字もバリデーション
-        if inp.trim().is_empty() {
+        if inp.is_empty() {
             let fallback_msg = crate::core::utils::fallback_translation(
                 bundle,
                 "warning_empty_special_chars",
