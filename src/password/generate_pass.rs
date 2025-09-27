@@ -14,11 +14,11 @@ limitations under the License. */
 
 use crate::cli::RupassArgs;
 use crate::cli::UserInterface;
+use crate::core::app_errors::GenerationError;
 use crate::core::app_errors::Result;
 use crate::core::utils::fallback_translation;
 use crate::password::character_set::assemble_character_set;
 use crate::password::password_generation::produce_password_within_time;
-use crate::core::app_errors::GenerationError;
 use crate::password::password_length::get_password_length;
 use fluent::{FluentBundle, FluentResource};
 

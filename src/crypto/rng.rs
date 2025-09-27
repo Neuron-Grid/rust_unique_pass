@@ -112,18 +112,16 @@ impl SecureRng {
 
         // 乱数生成
         let mut rng = self.rng.lock().map_err(|e| {
-            crate::core::app_errors::GenerationError::IoError(std::io::Error::other(
-                format!("RNG mutex poisoned: {e}"),
-            ))
+            crate::core::app_errors::GenerationError::IoError(std::io::Error::other(format!(
+                "RNG mutex poisoned: {e}"
+            )))
         })?;
         rng.fill_bytes(dest);
 
         // 基本的な品質チェック（全ゼロでないことを確認）
         if !dest.is_empty() && dest.iter().all(|&b| b == 0) {
             return Err(crate::core::app_errors::GenerationError::IoError(
-                std::io::Error::other(
-                    "Generated all-zero bytes - potential RNG failure",
-                ),
+                std::io::Error::other("Generated all-zero bytes - potential RNG failure"),
             ));
         }
 
@@ -162,9 +160,9 @@ impl SecureRng {
         let hkdf_seed = hkdf_expand(&seed)?;
 
         let mut rng = self.rng.lock().map_err(|e| {
-            crate::core::app_errors::GenerationError::IoError(std::io::Error::other(
-                format!("RNG mutex poisoned: {e}"),
-            ))
+            crate::core::app_errors::GenerationError::IoError(std::io::Error::other(format!(
+                "RNG mutex poisoned: {e}"
+            )))
         })?;
         *rng = ChaCha20Rng::from_seed(*hkdf_seed);
 

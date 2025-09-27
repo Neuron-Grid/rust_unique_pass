@@ -5,7 +5,7 @@ use rand_chacha::ChaCha8Rng;
 use rust_unique_pass::cli::UserInterface;
 use rust_unique_pass::core::app_errors::{GenerationError, Result};
 use rust_unique_pass::password::password_generation::PasswordStrengthEvaluator;
-use rust_unique_pass::{generate_password_flow, RupassArgs};
+use rust_unique_pass::{RupassArgs, generate_password_flow};
 use std::collections::VecDeque;
 
 // Mock evaluator for deterministic scenarios
@@ -19,7 +19,10 @@ struct MockEvaluator {
 
 impl MockEvaluator {
     fn new(seq: Vec<(u8, f64)>) -> Self {
-        Self { seq, idx: AtomicUsize::new(0) }
+        Self {
+            seq,
+            idx: AtomicUsize::new(0),
+        }
     }
 }
 
@@ -91,17 +94,27 @@ fn produce_with(
         rng.fill_bytes(&mut bytes);
         // simple candidate: cycle bytes into indices
         let mut pwd = String::with_capacity(len);
-        if all.is_empty() { return None; }
+        if all.is_empty() {
+            return None;
+        }
         for i in 0..len {
             let idx = bytes[i] as usize % all.len();
             pwd.push(all[idx]);
         }
-        if pwd.len() < 8 { continue; }
-        if pwd.chars().all(|c| c == pwd.chars().next().unwrap()) { continue; }
+        if pwd.len() < 8 {
+            continue;
+        }
+        if pwd.chars().all(|c| c == pwd.chars().next().unwrap()) {
+            continue;
+        }
         let (score, bits) = eval.score_entropy(&pwd);
-        if score >= min_score { return Some((pwd, score, bits, true)); }
+        if score >= min_score {
+            return Some((pwd, score, bits, true));
+        }
         if score > best_score || (score == best_score && bits > best_bits) {
-            best_score = score; best_bits = bits; best_pwd = Some(pwd);
+            best_score = score;
+            best_bits = bits;
+            best_pwd = Some(pwd);
         }
     }
     best_pwd.map(|p| (p, best_score, best_bits, false))
@@ -116,8 +129,8 @@ fn early_exit_when_target_reached() {
     // Score sequence: 0, 0, then 4 with some entropy
     let eval = MockEvaluator::new(vec![(0, 10.0), (0, 12.0), (4, 80.0)]);
 
-    let res = produce_with(&all, &req, 12, 4, &eval, &mut rng, 100)
-        .expect("should produce a candidate");
+    let res =
+        produce_with(&all, &req, 12, 4, &eval, &mut rng, 100).expect("should produce a candidate");
 
     let (_pwd, score, _bits, reached) = res;
     assert_eq!(score, 4);

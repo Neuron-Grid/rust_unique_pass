@@ -90,8 +90,8 @@ fn load_fluent_bundle(language: &str) -> Result<FluentBundle<FluentResource>> {
     let langid = map_to_fluent_code(language)?;
     let resource_filename = format!("{langid}.ftl");
 
-    let ftl_string = get_embedded_resource(&resource_filename)
-        .ok_or(GenerationError::UnsupportedLanguage)?;
+    let ftl_string =
+        get_embedded_resource(&resource_filename).ok_or(GenerationError::UnsupportedLanguage)?;
 
     let ftl_resource = FluentResource::try_new(ftl_string)
         .map_err(|_parse_errors| GenerationError::ResourceParseError)?;

@@ -83,11 +83,16 @@ pub async fn produce_password_within_time(
         attempts += 1;
 
         if let Some(candidate) = assemble_random_password(all_vec, len, req).await {
-            if candidate.len() != len { continue; }
+            if candidate.len() != len {
+                continue;
+            }
             // 軽量フィルタ: ごく弱い候補をスキップ
             if candidate.len() < 8 {
                 // drop candidate
-            } else if candidate.chars().all(|c| c == candidate.chars().next().unwrap_or('\0')) {
+            } else if candidate
+                .chars()
+                .all(|c| c == candidate.chars().next().unwrap_or('\0'))
+            {
                 // 全て同一文字
             } else {
                 let (score, bits) = evaluator.score_entropy(&candidate);
@@ -390,11 +395,16 @@ pub mod test_helpers {
         while attempts < max_attempts {
             attempts += 1;
             if let Some(candidate) = assemble_random_password_with_rng(rng, all_vec, len, req) {
-                if candidate.len() != len { continue; }
+                if candidate.len() != len {
+                    continue;
+                }
                 if candidate.len() < 8 {
                     continue;
                 }
-                if candidate.chars().all(|c| c == candidate.chars().next().unwrap_or('\0')) {
+                if candidate
+                    .chars()
+                    .all(|c| c == candidate.chars().next().unwrap_or('\0'))
+                {
                     continue;
                 }
                 let (score, bits) = evaluator.score_entropy(&candidate);

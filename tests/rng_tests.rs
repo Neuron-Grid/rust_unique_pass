@@ -1,5 +1,5 @@
-use rust_unique_pass::crypto::rng::*;
 use rust_unique_pass::crypto::get_global_rng;
+use rust_unique_pass::crypto::rng::*;
 use tokio;
 
 #[tokio::test]
@@ -31,11 +31,11 @@ async fn test_reseed() {
 async fn test_global_rng_basic() {
     let global_rng = get_global_rng();
     assert!(global_rng.is_ok());
-    
+
     let mut buffer = [0u8; 32];
     let result = global_rng.unwrap().generate_bytes(&mut buffer);
     assert!(result.is_ok());
-    
+
     // 全てゼロでないことを確認
     assert!(buffer.iter().any(|&b| b != 0));
 }
