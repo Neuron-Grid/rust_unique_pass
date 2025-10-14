@@ -83,9 +83,10 @@ pub async fn generate_password_flow(
                 // パスワードのみ（stdout）。警告は抑制
                 ui.print(res.password.as_str()).await?;
             } else {
-                // 見出し + パスワード
-                let output_msg = format!("{gen_msg}\n{}\n", res.password.as_str());
-                ui.print(&output_msg).await?;
+                // 見出し + パスワードを逐次出力して複製を避ける
+                ui.print(gen_msg.as_str()).await?;
+                ui.print(res.password.as_str()).await?;
+                ui.print("").await?;
 
                 // --show-strength 指定時のみ強度行を stdout に追加
                 if args.show_strength {

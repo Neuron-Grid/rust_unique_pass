@@ -18,7 +18,7 @@ use crate::crypto::zxcvbn_wrapper::zxcvbn_entropy_score;
 use crate::password::password_length::validate_password_length;
 use std::convert::TryInto;
 use std::time::{Duration, Instant};
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, Zeroizing};
 use zxcvbn::{Score, zxcvbn};
 
 const MAX_GENERATION_ATTEMPTS: usize = 500000;
@@ -82,18 +82,21 @@ pub async fn produce_password_within_time(
     while attempts < max_attempts {
         attempts += 1;
 
-        if let Some(candidate) = assemble_random_password(all_vec, len, req).await {
+        if let Some(mut candidate) = assemble_random_password(all_vec, len, req).await {
             if candidate.len() != len {
+                candidate.zeroize();
                 continue;
             }
             // 軽量フィルタ: ごく弱い候補をスキップ
             if candidate.len() < 8 {
-                // drop candidate
+                candidate.zeroize();
+                continue;
             } else if candidate
                 .chars()
                 .all(|c| c == candidate.chars().next().unwrap_or('\0'))
             {
                 // 全て同一文字
+                candidate.zeroize();
             } else {
                 let (score, bits) = evaluator.score_entropy(&candidate);
 
@@ -113,6 +116,8 @@ pub async fn produce_password_within_time(
                         reached_target: true,
                     });
                 }
+
+                candidate.zeroize();
             }
         }
 

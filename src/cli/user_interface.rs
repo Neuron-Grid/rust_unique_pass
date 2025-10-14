@@ -95,9 +95,9 @@ impl UserInterface for StdioInterface {
     async fn prompt(&mut self, message: &str) -> Result<String> {
         let mut stdout = io::stdout();
 
-        // メッセージ出力の堅牢化 - 単一write操作に統合
-        let prompt_bytes = format!("{message}\n").into_bytes();
-        stdout.write_all(&prompt_bytes).await?;
+        // メッセージを複製せずに直接書き出し
+        stdout.write_all(message.as_bytes()).await?;
+        stdout.write_all(b"\n").await?;
         stdout.flush().await?;
 
         let mut line = String::new();
@@ -120,10 +120,9 @@ impl UserInterface for StdioInterface {
     async fn print(&mut self, message: &str) -> Result<()> {
         let mut stdout = io::stdout();
 
-        // メッセージ出力の堅牢化
-        // 単一write操作に統合
-        let message_bytes = format!("{message}\n").into_bytes();
-        stdout.write_all(&message_bytes).await?;
+        // ヒープに複製を作らずに書き出し
+        stdout.write_all(message.as_bytes()).await?;
+        stdout.write_all(b"\n").await?;
         stdout.flush().await?;
         Ok(())
     }
