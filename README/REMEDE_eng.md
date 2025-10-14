@@ -31,9 +31,13 @@ is `rupass`.
 | `-l`           | `--language`        | Specifies the language for prompts and messages. (`jpn`, `eng`, `deu`)                        |
 | `-p`           | `--password-length` | Specifies the length of the password to be generated.                                         |
 | `-n`           | `--numbers`         | Include numbers in the password.                                                              |
+|                | `--no-numbers`      | Exclude numbers from the password.                                                            |
 | `-u`           | `--uppercase`       | Include uppercase letters in the password.                                                    |
+|                | `--no-uppercase`    | Exclude uppercase letters from the password.                                                  |
 | `-w`           | `--lowercase`       | Include lowercase letters in the password.                                                    |
+|                | `--no-lowercase`    | Exclude lowercase letters from the password.                                                  |
 | `-s`           | `--symbols`         | Include symbols in the password.                                                              |
+|                | `--no-symbols`      | Exclude symbols from the password.                                                            |
 |                | `--timeout-ms`      | Time budget for strength search in milliseconds (alias: `--budget-ms`). Default: `150` (>=10) |
 |                | `--min-score`       | Early-stop target score (0..=4). Default: `4`                                                 |
 |                | `--strict`          | Strict mode. Fail (exit 3) if target score not reached within budget                          |

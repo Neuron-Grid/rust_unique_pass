@@ -88,9 +88,13 @@ async fn normal_flow() {
         language: None,
         password_length: Some(15),
         numbers: true,
+        no_numbers: false,
         uppercase: true,
+        no_uppercase: false,
         lowercase: false,
+        no_lowercase: false,
         symbols: false,
+        no_symbols: false,
         timeout_ms: 150,
         min_score: 4,
         strict: false,
@@ -118,9 +122,13 @@ async fn too_short_interactive() {
         language: None,
         password_length: None,
         numbers: false,
+        no_numbers: false,
         uppercase: false,
+        no_uppercase: false,
         lowercase: false,
+        no_lowercase: false,
         symbols: false,
+        no_symbols: false,
         timeout_ms: 150,
         min_score: 4,
         strict: false,
@@ -152,9 +160,13 @@ async fn too_short_args() {
         // 不正
         password_length: Some(10),
         numbers: true,
+        no_numbers: false,
         uppercase: true,
+        no_uppercase: false,
         lowercase: true,
+        no_lowercase: false,
         symbols: false,
+        no_symbols: false,
         timeout_ms: 150,
         min_score: 4,
         strict: false,
@@ -175,9 +187,13 @@ async fn no_charset() {
         language: None,
         password_length: Some(15),
         numbers: false,
+        no_numbers: false,
         uppercase: false,
+        no_uppercase: false,
         lowercase: false,
+        no_lowercase: false,
         symbols: false,
+        no_symbols: false,
         timeout_ms: 150,
         min_score: 4,
         strict: false,
@@ -199,9 +215,13 @@ async fn custom_symbols() {
         language: None,
         password_length: Some(15),
         numbers: true,
+        no_numbers: false,
         uppercase: true,
+        no_uppercase: false,
         lowercase: true,
+        no_lowercase: false,
         symbols: false,
+        no_symbols: false,
         timeout_ms: 150,
         min_score: 4,
         strict: false,
@@ -219,4 +239,35 @@ async fn custom_symbols() {
     let pwd = extract_password(&out).expect("password not found");
     assert_eq!(pwd.len(), 15);
     assert!(pwd.chars().any(|c| "!?@#$%^&*()".contains(c)));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn negative_flags_skip_prompts() {
+    let args = RupassArgs {
+        language: None,
+        password_length: Some(16),
+        numbers: true,
+        no_numbers: false,
+        uppercase: false,
+        no_uppercase: true,
+        lowercase: true,
+        no_lowercase: false,
+        symbols: false,
+        no_symbols: true,
+        timeout_ms: 150,
+        min_score: 4,
+        strict: false,
+        show_strength: false,
+        quiet: false,
+        max_attempts: 1_000_000,
+    };
+    // 否定フラグにより対話無しで進行するはず
+    let mut ui = MockUI::default();
+    generate_password_flow(&mut ui, &mock_bundle(), &args)
+        .await
+        .expect("generation should succeed without prompts");
+    let out = ui.outputs_joined();
+    assert!(out.contains("Password Generation Result"));
+    let pwd = extract_password(&out).expect("password not found");
+    assert_eq!(pwd.len(), 16);
 }

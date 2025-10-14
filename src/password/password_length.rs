@@ -88,7 +88,7 @@ pub async fn get_password_length(
 #[doc(alias = "validate")]
 #[doc(alias = "length validation")]
 pub fn validate_password_length(len: usize) -> Result<()> {
-    if len < 15 || len > MAX_PASSWORD_LENGTH {
+    if !(15..=MAX_PASSWORD_LENGTH).contains(&len) {
         Err(GenerationError::InvalidLength)
     } else {
         Ok(())

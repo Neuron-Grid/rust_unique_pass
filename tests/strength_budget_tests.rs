@@ -11,8 +11,8 @@ use std::collections::VecDeque;
 // Mock evaluator for deterministic scenarios
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+// Sequence of scores to return; last value repeats
 struct MockEvaluator {
-    // Sequence of scores to return; last value repeats
     seq: Vec<(u8, f64)>,
     idx: AtomicUsize,
 }
@@ -97,8 +97,8 @@ fn produce_with(
         if all.is_empty() {
             return None;
         }
-        for i in 0..len {
-            let idx = bytes[i] as usize % all.len();
+        for byte in bytes.iter().take(len) {
+            let idx = (*byte as usize) % all.len();
             pwd.push(all[idx]);
         }
         if pwd.len() < 8 {
@@ -160,9 +160,13 @@ async fn quiet_output_is_password_only() {
         language: None,
         password_length: Some(15),
         numbers: true,
+        no_numbers: false,
         uppercase: true,
+        no_uppercase: false,
         lowercase: true,
+        no_lowercase: false,
         symbols: true,
+        no_symbols: false,
         timeout_ms: 150,
         min_score: 2, // allow loose target for speed
         strict: false,
@@ -188,9 +192,13 @@ async fn show_strength_adds_line() {
         language: None,
         password_length: Some(15),
         numbers: true,
+        no_numbers: false,
         uppercase: true,
+        no_uppercase: false,
         lowercase: true,
+        no_lowercase: false,
         symbols: true,
+        no_symbols: false,
         timeout_ms: 150,
         min_score: 1,
         strict: false,

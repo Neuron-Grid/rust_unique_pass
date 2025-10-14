@@ -117,10 +117,9 @@ pub async fn produce_password_within_time(
         }
 
         // 時間チェック（間引き）
-        if attempts % NOW_CHECK_INTERVAL == 0 {
-            if Instant::now() >= deadline {
-                break;
-            }
+        #[allow(clippy::manual_is_multiple_of)] // modulus-based check keeps MSRV compatibility
+        if attempts % NOW_CHECK_INTERVAL == 0 && Instant::now() >= deadline {
+            break;
         }
     }
 
@@ -239,10 +238,10 @@ pub async fn assemble_random_password(
 
     // 残りの文字をランダム選択
     for _ in 0..rest {
-        if let Some(index) = rng_adapter.next_index(all_vec.len()) {
-            if let Some(&ch) = all_vec.get(index) {
-                pwd.push(ch);
-            }
+        if let Some(index) = rng_adapter.next_index(all_vec.len())
+            && let Some(&ch) = all_vec.get(index)
+        {
+            pwd.push(ch);
         }
     }
 
@@ -362,10 +361,10 @@ pub mod test_helpers {
         let rest = len - need.len();
         let mut pwd: Vec<char> = need;
         for _ in 0..rest {
-            if let Some(index) = rng_adapter.next_index(all_vec.len()) {
-                if let Some(&ch) = all_vec.get(index) {
-                    pwd.push(ch);
-                }
+            if let Some(index) = rng_adapter.next_index(all_vec.len())
+                && let Some(&ch) = all_vec.get(index)
+            {
+                pwd.push(ch);
             }
         }
         for i in (1..pwd.len()).rev() {

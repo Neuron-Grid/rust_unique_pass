@@ -42,7 +42,8 @@ pub async fn assemble_character_set(
     args: &RupassArgs,
 ) -> Result<(String, Vec<String>)> {
     let (base, req) = assemble_flag_based_charset(args);
-    let (mut charset, mut req_sets) = ask_user_for_additional_sets(ui, bundle, base, req).await?;
+    let (mut charset, mut req_sets) =
+        ask_user_for_additional_sets(ui, bundle, args, base, req).await?;
     let special = handle_special_characters(ui, bundle, args).await?;
     if !special.is_empty() {
         charset.push_str(&special);
@@ -118,6 +119,7 @@ fn remove_duplicate_chars(input: &str) -> String {
 /// # Arguments
 /// * `ui`: ユーザーとの対話に使用する [`UserInterface`] トレイトオブジェクト。
 /// * `bundle`: 国際化対応に使用する [`FluentBundle`] オブジェクト。
+/// * `args`: コマンドライン引数を格納した [`RupassArgs`] 構造体。
 /// * `charset`: 現在の文字セット。
 /// * `required`: 現在の必須文字セットのリスト。
 ///
@@ -129,18 +131,31 @@ fn remove_duplicate_chars(input: &str) -> String {
 async fn ask_user_for_additional_sets(
     ui: &mut dyn UserInterface,
     bundle: &FluentBundle<FluentResource>,
+    args: &RupassArgs,
     charset: String,
     required: Vec<String>,
 ) -> Result<(String, Vec<String>)> {
     let q = [
-        ("question_uppercase", "ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
-        ("question_lowercase", "abcdefghijklmnopqrstuvwxyz"),
-        ("question_numbers", "0123456789"),
+        (
+            args.no_uppercase,
+            "question_uppercase",
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+        ),
+        (
+            args.no_lowercase,
+            "question_lowercase",
+            "abcdefghijklmnopqrstuvwxyz",
+        ),
+        (args.no_numbers, "question_numbers", "0123456789"),
     ];
 
     let (mut acc, mut req) = (charset, required);
 
-    for (key, chars) in q {
+    for (skip, key, chars) in q {
+        if skip {
+            continue;
+        }
+
         if req.iter().any(|r| r == chars) {
             continue;
         }
@@ -173,6 +188,10 @@ async fn handle_special_characters(
     bundle: &FluentBundle<FluentResource>,
     args: &RupassArgs,
 ) -> Result<String> {
+    if args.no_symbols {
+        return Ok(String::new());
+    }
+
     if args.symbols {
         return Ok(DEFAULT_SPECIAL_CHARS.to_owned());
     }

@@ -29,6 +29,26 @@ fn test_parse_args_short_aliases() {
     assert!(parsed.symbols);
 }
 
+#[test]
+fn test_parse_args_negative_flags() {
+    let args = vec![
+        "test_app",
+        "--no-numbers",
+        "--no-uppercase",
+        "--no-lowercase",
+        "--no-symbols",
+    ];
+    let parsed = parse_args_from_iter(args);
+    assert!(parsed.no_numbers);
+    assert!(parsed.no_uppercase);
+    assert!(parsed.no_lowercase);
+    assert!(parsed.no_symbols);
+    assert!(!parsed.numbers);
+    assert!(!parsed.uppercase);
+    assert!(!parsed.lowercase);
+    assert!(!parsed.symbols);
+}
+
 /// Helper: clapの引数パース関数を呼び出す。
 fn parse_args_from_iter<I, T>(iter: I) -> RupassArgs
 where
@@ -45,9 +65,13 @@ fn test_initialize_bundle_unsupported_language() {
         language: Some("xxx".to_string()),
         password_length: None,
         numbers: false,
+        no_numbers: false,
         uppercase: false,
+        no_uppercase: false,
         lowercase: false,
+        no_lowercase: false,
         symbols: false,
+        no_symbols: false,
         timeout_ms: 150,
         min_score: 4,
         strict: false,
@@ -66,9 +90,13 @@ fn test_get_translation_missing_key() {
         language: None,
         password_length: None,
         numbers: false,
+        no_numbers: false,
         uppercase: false,
+        no_uppercase: false,
         lowercase: false,
+        no_lowercase: false,
         symbols: false,
+        no_symbols: false,
         timeout_ms: 150,
         min_score: 4,
         strict: false,
@@ -89,9 +117,13 @@ fn test_get_translation_with_args() {
         language: None,
         password_length: None,
         numbers: false,
+        no_numbers: false,
         uppercase: false,
+        no_uppercase: false,
         lowercase: false,
+        no_lowercase: false,
         symbols: false,
+        no_symbols: false,
         timeout_ms: 150,
         min_score: 4,
         strict: false,
@@ -129,9 +161,13 @@ fn test_initialize_bundle_jpn() {
         language: Some("jpn".to_string()),
         password_length: None,
         numbers: false,
+        no_numbers: false,
         uppercase: false,
+        no_uppercase: false,
         lowercase: false,
+        no_lowercase: false,
         symbols: false,
+        no_symbols: false,
         timeout_ms: 150,
         min_score: 4,
         strict: false,
@@ -162,9 +198,13 @@ fn test_jpn_translation_error_message() {
         language: Some("jpn".to_string()),
         password_length: None,
         numbers: false,
+        no_numbers: false,
         uppercase: false,
+        no_uppercase: false,
         lowercase: false,
+        no_lowercase: false,
         symbols: false,
+        no_symbols: false,
         timeout_ms: 150,
         min_score: 4,
         strict: false,
@@ -190,9 +230,13 @@ fn test_compare_eng_and_jpn_translations() {
         language: Some("eng".to_string()),
         password_length: None,
         numbers: false,
+        no_numbers: false,
         uppercase: false,
+        no_uppercase: false,
         lowercase: false,
+        no_lowercase: false,
         symbols: false,
+        no_symbols: false,
         timeout_ms: 150,
         min_score: 4,
         strict: false,
@@ -204,9 +248,13 @@ fn test_compare_eng_and_jpn_translations() {
         language: Some("jpn".to_string()),
         password_length: None,
         numbers: false,
+        no_numbers: false,
         uppercase: false,
+        no_uppercase: false,
         lowercase: false,
+        no_lowercase: false,
         symbols: false,
+        no_symbols: false,
         timeout_ms: 150,
         min_score: 4,
         strict: false,
@@ -248,9 +296,13 @@ fn test_default_language_is_eng() {
         language: None,
         password_length: None,
         numbers: false,
+        no_numbers: false,
         uppercase: false,
+        no_uppercase: false,
         lowercase: false,
+        no_lowercase: false,
         symbols: false,
+        no_symbols: false,
         timeout_ms: 150,
         min_score: 4,
         strict: false,

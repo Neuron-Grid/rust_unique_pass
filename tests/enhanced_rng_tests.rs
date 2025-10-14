@@ -1,6 +1,5 @@
 use rust_unique_pass::crypto::{SecureRng, get_global_rng};
 use std::sync::Arc;
-use tokio;
 
 #[tokio::test]
 async fn test_auto_reseed_functionality() {

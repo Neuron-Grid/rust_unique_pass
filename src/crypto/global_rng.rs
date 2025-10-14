@@ -117,10 +117,10 @@ static INIT: Once = Once::new();
 /// グローバルRNGインスタンスを取得
 pub fn get_global_rng() -> AppResult<Arc<GlobalRng>> {
     INIT.call_once(|| {
-        if let Ok(rng) = GlobalRng::new() {
-            if let Ok(mut guard) = GLOBAL_RNG.lock() {
-                *guard = Some(Arc::new(rng));
-            }
+        if let Ok(rng) = GlobalRng::new()
+            && let Ok(mut guard) = GLOBAL_RNG.lock()
+        {
+            *guard = Some(Arc::new(rng));
         }
     });
 

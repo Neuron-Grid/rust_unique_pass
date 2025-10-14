@@ -35,6 +35,14 @@ pub struct RupassArgs {
     )]
     pub numbers: bool,
 
+    // 数字を使用しないフラグ
+    #[clap(
+        long = "no-numbers",
+        help = "Exclude numbers from the password.",
+        conflicts_with = "numbers"
+    )]
+    pub no_numbers: bool,
+
     // 大文字を含むかどうかのフラグ
     #[clap(
         short = 'u',
@@ -43,6 +51,14 @@ pub struct RupassArgs {
     )]
     pub uppercase: bool,
 
+    // 大文字を使用しないフラグ
+    #[clap(
+        long = "no-uppercase",
+        help = "Exclude uppercase letters from the password.",
+        conflicts_with = "uppercase"
+    )]
+    pub no_uppercase: bool,
+
     // 小文字を含むかどうかのフラグ
     #[clap(
         short = 'w',
@@ -50,6 +66,14 @@ pub struct RupassArgs {
         help = "Include lowercase letters in the password."
     )]
     pub lowercase: bool,
+
+    // 小文字を使用しないフラグ
+    #[clap(
+        long = "no-lowercase",
+        help = "Exclude lowercase letters from the password.",
+        conflicts_with = "lowercase"
+    )]
+    pub no_lowercase: bool,
 
     // 特殊記号を含むかどうかのフラグ
     #[clap(
@@ -60,6 +84,14 @@ pub struct RupassArgs {
         \nYou can change which special symbols are used."
     )]
     pub symbols: bool,
+
+    // 特殊記号を使用しないフラグ
+    #[clap(
+        long = "no-symbols",
+        help = "Exclude symbols from the password.",
+        conflicts_with = "symbols"
+    )]
+    pub no_symbols: bool,
 
     // 強度探索の時間予算（ミリ秒）
     #[clap(

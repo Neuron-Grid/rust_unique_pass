@@ -1,6 +1,5 @@
 use rust_unique_pass::crypto::get_global_rng;
 use rust_unique_pass::crypto::rng::*;
-use tokio;
 
 #[tokio::test]
 async fn test_secure_rng_initialization() {
