@@ -1,5 +1,6 @@
 // src/crypto/secure_memory.rs のテストを分離
 
+use rust_unique_pass::crypto::CryptoError;
 use rust_unique_pass::crypto::secure_memory::*;
 
 #[test]
@@ -21,4 +22,15 @@ fn test_memory_protection() {
 
     assert!(MemoryProtection::secure_compare(a, b));
     assert!(!MemoryProtection::secure_compare(a, c));
+}
+
+#[test]
+fn test_secure_memory_large_allocation_error() {
+    let result = SecureMemory::new(usize::MAX);
+
+    match result {
+        Err(CryptoError::MemoryError(message)) => assert_eq!(message, "Layout error"),
+        Err(other) => panic!("unexpected CryptoError variant: {other:?}"),
+        Ok(_) => panic!("expected Err(CryptoError::MemoryError), got Ok"),
+    }
 }

@@ -25,8 +25,9 @@ limitations under the License. */
 ///
 use super::{CryptoError, CryptoResult};
 use std::alloc::{Layout, alloc, dealloc};
-use std::pin::Pin;
-use std::ptr;
+use std::io;
+use std::mem::ManuallyDrop;
+use std::ptr::{self, NonNull};
 use zeroize::Zeroize;
 
 /// プラットフォーム固有のメモリ保護機能を提供
@@ -35,91 +36,136 @@ struct MemoryProtector;
 impl MemoryProtector {
     /// メモリをロックしてスワップを防ぐ
     #[inline]
-    fn lock_memory(ptr: *mut u8, size: usize) -> Result<(), String> {
+    fn lock_memory(buffer: &mut [u8]) -> Result<(), String> {
+        if buffer.is_empty() {
+            return Ok(());
+        }
+
         #[cfg(unix)]
         {
-            use libc::mlock;
-            unsafe {
-                if mlock(ptr as *mut _, size) != 0 {
-                    return Err("mlock failed".to_string());
-                }
+            let ptr = buffer.as_mut_ptr() as *mut libc::c_void;
+            let len = buffer.len();
+            let result = unsafe { libc::mlock(ptr, len) };
+            if result != 0 {
+                return Err(io::Error::last_os_error().to_string());
             }
-            Ok(())
         }
+
         #[cfg(windows)]
         {
             use windows_sys::Win32::System::Memory::VirtualLock;
-            unsafe {
-                if VirtualLock(ptr as *mut _, size) == 0 {
-                    return Err("VirtualLock failed".to_string());
-                }
+            let ptr = buffer.as_mut_ptr() as *mut core::ffi::c_void;
+            let len = buffer.len();
+            let ok = unsafe { VirtualLock(ptr, len) };
+            if ok == 0 {
+                return Err(io::Error::last_os_error().to_string());
             }
-            Ok(())
         }
+
         #[cfg(not(any(unix, windows)))]
         {
-            // メモリロックはサポートされていないが、エラーにはしない
-            Ok(())
+            // メモリロック非対応OSではベストエフォートで処理継続
+            return Ok(());
         }
+
+        Ok(())
     }
 
     /// メモリロックを解除
     #[inline]
-    fn unlock_memory(ptr: *mut u8, size: usize) -> Result<(), String> {
+    fn unlock_memory(buffer: &mut [u8]) -> Result<(), String> {
+        if buffer.is_empty() {
+            return Ok(());
+        }
+
         #[cfg(unix)]
         {
-            use libc::munlock;
-            unsafe {
-                if munlock(ptr as *mut _, size) != 0 {
-                    return Err("munlock failed".to_string());
-                }
+            let ptr = buffer.as_mut_ptr() as *mut libc::c_void;
+            let len = buffer.len();
+            let result = unsafe { libc::munlock(ptr, len) };
+            if result != 0 {
+                return Err(io::Error::last_os_error().to_string());
             }
-            Ok(())
         }
+
         #[cfg(windows)]
         {
             use windows_sys::Win32::System::Memory::VirtualUnlock;
-            unsafe {
-                if VirtualUnlock(ptr as *mut _, size) == 0 {
-                    return Err("VirtualUnlock failed".to_string());
-                }
+            let ptr = buffer.as_mut_ptr() as *mut core::ffi::c_void;
+            let len = buffer.len();
+            let ok = unsafe { VirtualUnlock(ptr, len) };
+            if ok == 0 {
+                return Err(io::Error::last_os_error().to_string());
             }
-            Ok(())
         }
+
         #[cfg(not(any(unix, windows)))]
         {
-            Ok(())
+            return Ok(());
         }
+
+        Ok(())
     }
 
     /// 追加のメモリ保護
     /// コアダンプ除外など
     #[inline]
-    fn additional_protection(_ptr: *mut u8, _size: usize) -> Result<(), String> {
+    fn additional_protection(buffer: &mut [u8]) -> Result<(), String> {
+        if buffer.is_empty() {
+            return Ok(());
+        }
+
         #[cfg(all(unix, target_os = "linux"))]
         {
-            use libc::madvise;
-            const MADV_DONTDUMP: i32 = 16;
-            unsafe {
-                if madvise(_ptr as *mut _, _size, MADV_DONTDUMP) != 0 {
-                    // 警告だけで続行
-                    return Err("madvise failed (non-critical)".to_string());
-                }
+            let ptr = buffer.as_mut_ptr() as *mut libc::c_void;
+            let len = buffer.len();
+            let result = unsafe { libc::madvise(ptr, len, libc::MADV_DONTDUMP) };
+            if result != 0 {
+                return Err(io::Error::last_os_error().to_string());
             }
         }
+
         Ok(())
     }
 }
 
 /// セキュアメモリアロケータ
-/// メモリロックとゼロ化を自動的に行うセキュアなメモリ管理を提供します。
-pub struct SecureMemory<T> {
-    ptr: *mut T,
+/// ゼロ化とプラットフォーム保護を自動的に行うセキュアなメモリ管理を提供します。
+pub struct SecureMemory {
+    data: Vec<u8>,
+}
+
+/// `SecureMemory` 構築中に生メモリを管理するためのガード。
+/// 途中でエラーが発生しても必ずゼロ化と `dealloc` を実行します。
+struct RawSecureBuf {
+    ptr: NonNull<u8>,
     len: usize,
     layout: Layout,
 }
 
-impl<T> SecureMemory<T> {
+impl RawSecureBuf {
+    #[inline]
+    fn as_mut_slice(&mut self) -> &mut [u8] {
+        unsafe { std::slice::from_raw_parts_mut(self.ptr.as_ptr(), self.len) }
+    }
+
+    #[inline]
+    fn into_vec(self) -> Vec<u8> {
+        let this = ManuallyDrop::new(self);
+        unsafe { Vec::from_raw_parts(this.ptr.as_ptr(), this.len, this.len) }
+    }
+}
+
+impl Drop for RawSecureBuf {
+    fn drop(&mut self) {
+        unsafe {
+            ptr::write_bytes(self.ptr.as_ptr(), 0, self.len);
+            dealloc(self.ptr.as_ptr(), self.layout);
+        }
+    }
+}
+
+impl SecureMemory {
     /// 新しいセキュアメモリを割り当てる
     /// - メモリロック（mlock/VirtualLock）でスワップ防止
     /// - Linuxではmadviseでコアダンプ除外
@@ -132,79 +178,74 @@ impl<T> SecureMemory<T> {
             ));
         }
 
-        let layout = Layout::array::<T>(len)
+        let layout = Layout::array::<u8>(len)
             .map_err(|_| CryptoError::MemoryError("Layout error".to_string()))?;
 
-        let ptr = unsafe {
-            let ptr = alloc(layout) as *mut T;
-            if ptr.is_null() {
-                return Err(CryptoError::MemoryError(
-                    "Memory allocation failed".to_string(),
-                ));
-            }
+        let ptr = unsafe { alloc(layout) };
+        let ptr = NonNull::new(ptr)
+            .ok_or_else(|| CryptoError::MemoryError("Memory allocation failed".to_string()))?;
 
-            // メモリをゼロクリア
-            ptr::write_bytes(ptr, 0, len);
+        unsafe {
+            ptr::write_bytes(ptr.as_ptr(), 0, len);
+        }
 
-            // メモリロック（スワップ防止）
-            if let Err(e) = MemoryProtector::lock_memory(ptr as *mut u8, layout.size()) {
-                dealloc(ptr as *mut u8, layout);
-                return Err(CryptoError::MemoryError(format!(
-                    "Memory protection failed: {e}"
-                )));
-            }
+        let mut raw = RawSecureBuf { ptr, len, layout };
 
-            // 追加の保護
-            // コアダンプ除外など
-            if let Err(e) = MemoryProtector::additional_protection(ptr as *mut u8, layout.size()) {
-                // 追加保護の失敗は警告レベル、続行可能
-                eprintln!("Warning: Additional memory protection failed: {e}");
-            }
+        if let Err(e) = MemoryProtector::lock_memory(raw.as_mut_slice()) {
+            return Err(CryptoError::MemoryError(format!(
+                "Memory protection failed: {e}"
+            )));
+        }
 
-            ptr
-        };
+        if let Err(e) = MemoryProtector::additional_protection(raw.as_mut_slice()) {
+            eprintln!("Warning: Additional memory protection failed: {e}");
+        }
 
-        Ok(Self { ptr, len, layout })
+        let data = raw.into_vec();
+
+        Ok(Self { data })
     }
 
     /// スライスとしてアクセス
-    pub fn as_slice(&self) -> &[T] {
-        unsafe { std::slice::from_raw_parts(self.ptr, self.len) }
+    pub fn as_slice(&self) -> &[u8] {
+        &self.data
     }
 
     /// 可変スライスとしてアクセス
-    pub fn as_mut_slice(&mut self) -> &mut [T] {
-        unsafe { std::slice::from_raw_parts_mut(self.ptr, self.len) }
+    pub fn as_mut_slice(&mut self) -> &mut [u8] {
+        &mut self.data
+    }
+
+    /// 確保済みのバッファ長を返却
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    /// 空かどうかを返却
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
+
+    /// 容量を取得
+    pub fn capacity(&self) -> usize {
+        self.data.len()
     }
 }
 
-impl<T> Drop for SecureMemory<T> {
+impl Drop for SecureMemory {
     fn drop(&mut self) {
-        unsafe {
-            // メモリ内容の安全な消去
-            ptr::write_bytes(self.ptr, 0, self.len);
+        self.data.zeroize();
 
-            // メモリロック解除
-            if let Err(e) = MemoryProtector::unlock_memory(self.ptr as *mut u8, self.layout.size())
-            {
-                // ロック解除の失敗は警告レベル
-                eprintln!("Warning: Memory unlock failed: {e}");
-            }
-
-            // メモリ解放
-            dealloc(self.ptr as *mut u8, self.layout);
+        if let Err(e) = MemoryProtector::unlock_memory(&mut self.data) {
+            eprintln!("Warning: Memory unlock failed: {e}");
         }
     }
 }
 
-// Sendを安全に実装
-// Tに依存
-unsafe impl<T: Send> Send for SecureMemory<T> {}
-
 /// パスワード用のセキュアな文字列型
 /// 自動的にゼロ化され、メモリロックされた文字列を提供します。
 pub struct SecureString {
-    data: Pin<Box<SecureMemory<u8>>>,
+    data: SecureMemory,
     len: usize,
 }
 
@@ -212,12 +253,8 @@ impl SecureString {
     /// 通常の文字列からセキュア文字列を作成
     pub fn new(s: &str) -> CryptoResult<Self> {
         let bytes = s.as_bytes();
-        let mut memory = Box::pin(SecureMemory::<u8>::new(bytes.len())?);
-
-        // 安全なコピー
-        unsafe {
-            ptr::copy_nonoverlapping(bytes.as_ptr(), memory.as_mut().get_mut().ptr, bytes.len());
-        }
+        let mut memory = SecureMemory::new(bytes.len())?;
+        memory.as_mut_slice().copy_from_slice(bytes);
 
         Ok(Self {
             data: memory,
@@ -227,7 +264,7 @@ impl SecureString {
 
     /// 空のセキュア文字列を作成
     pub fn with_capacity(capacity: usize) -> CryptoResult<Self> {
-        let memory = Box::pin(SecureMemory::<u8>::new(capacity)?);
+        let memory = SecureMemory::new(capacity)?;
 
         Ok(Self {
             data: memory,
@@ -270,18 +307,14 @@ impl SecureString {
 
     /// 容量を取得
     pub fn capacity(&self) -> usize {
-        self.data.len
+        self.data.capacity()
     }
 }
 
 impl Drop for SecureString {
     fn drop(&mut self) {
-        // 明示的なゼロ化
-        // SecureMemoryのDropでも行われるが、二重に保護
         if self.len > 0 {
-            // data.as_mut_slice()を使用してより安全にアクセス
-            let pinned = unsafe { Pin::get_unchecked_mut(self.data.as_mut()) };
-            let slice = &mut pinned.as_mut_slice()[..self.len];
+            let slice = &mut self.data.as_mut_slice()[..self.len];
             slice.zeroize();
         }
     }
