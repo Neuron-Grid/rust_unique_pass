@@ -17,6 +17,7 @@ use crate::crypto::rng::SecureRng;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+use zeroize::{Zeroize, Zeroizing};
 
 /// グローバルRNGインスタンスの管理
 /// パフォーマンス向上と自動再シード機能を提供
@@ -25,6 +26,18 @@ pub struct GlobalRng {
     output_counter: AtomicU64,
     reseed_threshold: u64,
     last_reseed: AtomicU64,
+}
+
+/// バイトストリーム抽象化
+pub trait ByteStream {
+    /// バッファを補充する。失敗した場合は [`GenerationError`] を返す。
+    fn fill_next_block(&mut self) -> AppResult<()>;
+
+    /// 未消費のバイトスライスを取得する。
+    fn remaining_bytes(&self) -> &[u8];
+
+    /// 先頭から `n` バイトを消費する。利用可能バイト数を超える場合は切り詰める。
+    fn consume(&mut self, n: usize);
 }
 
 impl GlobalRng {
@@ -98,6 +111,71 @@ impl GlobalRng {
             last_reseed: self.last_reseed.load(Ordering::Relaxed),
             reseed_threshold: self.reseed_threshold,
         }
+    }
+
+    /// グローバルRNGをオンデマンドで読み出すストリームを生成
+    pub fn stream(self: &Arc<Self>) -> GlobalRngStream {
+        GlobalRngStream::new(self.clone())
+    }
+}
+
+const GLOBAL_STREAM_BLOCK_SIZE: usize = 256;
+
+/// [`GlobalRng`] からチャンクごとに乱数を取得するストリーム
+pub struct GlobalRngStream {
+    rng: Arc<GlobalRng>,
+    cache: Zeroizing<[u8; GLOBAL_STREAM_BLOCK_SIZE]>,
+    cursor: usize,
+    available: usize,
+}
+
+impl GlobalRngStream {
+    pub fn new(rng: Arc<GlobalRng>) -> Self {
+        Self {
+            rng,
+            cache: Zeroizing::new([0u8; GLOBAL_STREAM_BLOCK_SIZE]),
+            cursor: 0,
+            available: 0,
+        }
+    }
+}
+
+impl ByteStream for GlobalRngStream {
+    fn fill_next_block(&mut self) -> AppResult<()> {
+        if let Err(err) = self.rng.generate_bytes(self.cache.as_mut()) {
+            self.cache.as_mut().zeroize();
+            self.cursor = 0;
+            self.available = 0;
+            return Err(err);
+        }
+        self.cursor = 0;
+        self.available = self.cache.len();
+        Ok(())
+    }
+
+    fn remaining_bytes(&self) -> &[u8] {
+        let end = self
+            .cursor
+            .saturating_add(self.available)
+            .min(self.cache.len());
+        &self.cache[self.cursor..end]
+    }
+
+    fn consume(&mut self, n: usize) {
+        let take = n.min(self.available);
+        self.cursor = (self.cursor + take).min(self.cache.len());
+        self.available = self.available.saturating_sub(take);
+        if self.available == 0 {
+            self.cursor = 0;
+        }
+    }
+}
+
+impl Drop for GlobalRngStream {
+    fn drop(&mut self) {
+        self.cache.as_mut().zeroize();
+        self.cursor = 0;
+        self.available = 0;
     }
 }
 

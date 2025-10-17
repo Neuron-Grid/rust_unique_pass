@@ -13,10 +13,9 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 use crate::core::app_errors::{GenerationError, Result};
-use crate::crypto::global_rng::get_global_rng;
+use crate::crypto::global_rng::{ByteStream, get_global_rng};
 use crate::crypto::zxcvbn_wrapper::zxcvbn_entropy_score;
 use crate::password::password_length::validate_password_length;
-use std::convert::TryInto;
 use std::time::{Duration, Instant};
 use zeroize::{Zeroize, Zeroizing};
 use zxcvbn::{Score, zxcvbn};
@@ -204,72 +203,63 @@ pub async fn assemble_random_password(
         return None;
     }
 
-    // グローバルRNGインスタンスを使用
-    // パフォーマンス向上
-    let global_rng = match get_global_rng() {
-        Ok(rng) => rng,
-        Err(_) => return None,
-    };
+    let global_rng = get_global_rng().ok()?;
+    let mut sampler = StreamingIndexSampler::new(global_rng.stream());
+    assemble_random_password_internal(&mut sampler, all_vec, len, req, None)
+}
 
-    // 乱数バッファ準備
-    // secure_random_index は 8 バイト単位で消費し、
-    // リジェクションが発生すると追加でバイトを消費する。
-    // 予備を十分に確保してバッファ枯渇による None を防ぐ。
-    let mut random_bytes = vec![0u8; len * 16]; // 以前: len*4
-    if global_rng.generate_bytes(&mut random_bytes).is_err() {
+fn assemble_random_password_internal<S: ByteStream>(
+    sampler: &mut StreamingIndexSampler<S>,
+    all_vec: &[char],
+    len: usize,
+    req: &[Vec<char>],
+    mut swap_counter: Option<&mut usize>,
+) -> Option<String> {
+    if all_vec.is_empty() {
         return None;
     }
 
-    let mut rng_adapter = BytesToIndexAdapter::new(&random_bytes);
-
-    // 各必須セットから1文字ずつ
-    let need: Vec<char> = req
-        .iter()
-        .filter_map(|set| {
-            if set.is_empty() {
-                return None;
-            }
-            let index = rng_adapter.next_index(set.len())?;
-            set.get(index).copied()
-        })
-        .collect();
+    let mut need: Vec<char> = Vec::with_capacity(req.len());
+    for set in req {
+        if set.is_empty() {
+            continue;
+        }
+        let index = sampler.next_index(set.len())?;
+        let ch = set.get(index).copied()?;
+        need.push(ch);
+    }
 
     if need.len() > len {
         return None;
     }
 
-    let rest = len - need.len();
+    let rest = len.checked_sub(need.len())?;
     let mut pwd: Vec<char> = need;
 
-    // 残りの文字をランダム選択
     for _ in 0..rest {
-        if let Some(index) = rng_adapter.next_index(all_vec.len())
-            && let Some(&ch) = all_vec.get(index)
-        {
-            pwd.push(ch);
-        }
+        let index = sampler.next_index(all_vec.len())?;
+        let ch = all_vec.get(index).copied()?;
+        pwd.push(ch);
     }
 
-    // Fisher-Yatesアルゴリズムでシャッフル
     for i in (1..pwd.len()).rev() {
-        if let Some(j) = rng_adapter.next_index(i + 1) {
-            pwd.swap(i, j);
+        let j = sampler.next_index(i + 1)?;
+        pwd.swap(i, j);
+        if let Some(counter) = swap_counter.as_mut() {
+            **counter += 1;
         }
     }
 
     Some(pwd.iter().collect())
 }
 
-/// バイト配列をインデックスに変換するアダプタ
-/// 偏りの少ない変換を提供
-struct BytesToIndexAdapter<'a> {
-    bytes: &'a [u8],
-    position: usize,
+struct StreamingIndexSampler<S: ByteStream> {
+    stream: S,
 }
 
-impl<'a> BytesToIndexAdapter<'a> {
-    fn new(bytes: &'a [u8]) -> Self {
-        Self { bytes, position: 0 }
+impl<S: ByteStream> StreamingIndexSampler<S> {
+    fn new(stream: S) -> Self {
+        Self { stream }
     }
 
     fn next_index(&mut self, max: usize) -> Option<usize> {
@@ -277,32 +267,43 @@ impl<'a> BytesToIndexAdapter<'a> {
             return None;
         }
 
-        // 2 の累乗に切り上げたマスクを計算
-        let mask = max.next_power_of_two().saturating_sub(1);
+        let mask = max.next_power_of_two().saturating_sub(1) as u64;
 
         loop {
-            // 可能な限り usize 長 (8バイト) をまとめて読み取る
-            let value: usize = if self.position + std::mem::size_of::<usize>() <= self.bytes.len() {
-                let slice =
-                    &self.bytes[self.position..self.position + std::mem::size_of::<usize>()];
-                self.position += std::mem::size_of::<usize>();
-                usize::from_le_bytes(slice.try_into().expect("slice with incorrect length"))
-            } else if self.position < self.bytes.len() {
-                // 残バイトが 8 未満の場合は 1 バイトだけ使用
-                let byte = self.bytes[self.position];
-                self.position += 1;
-                byte as usize
-            } else {
-                // 乱数バイトを使い切った
-                return None;
-            };
-
-            let candidate = value & mask;
+            let value = self.fetch_u64()?;
+            let candidate = (value & mask) as usize;
             if candidate < max {
                 return Some(candidate);
             }
-            // candidate >= max の場合はリトライしてバイアスを排除
         }
+    }
+
+    fn fetch_u64(&mut self) -> Option<u64> {
+        const WORD: usize = std::mem::size_of::<u64>();
+        let mut word = [0u8; WORD];
+        let mut filled = 0;
+
+        while filled < WORD {
+            if self.stream.remaining_bytes().is_empty() {
+                self.stream.fill_next_block().ok()?;
+                if self.stream.remaining_bytes().is_empty() {
+                    return None;
+                }
+            }
+
+            let available = self.stream.remaining_bytes();
+            let take = (WORD - filled).min(available.len());
+            word[filled..filled + take].copy_from_slice(&available[..take]);
+            self.stream.consume(take);
+            filled += take;
+        }
+
+        Some(u64::from_le_bytes(word))
+    }
+
+    #[cfg(test)]
+    fn into_stream(self) -> S {
+        self.stream
     }
 }
 
@@ -334,50 +335,97 @@ fn is_strong(pwd: &str) -> bool {
 pub mod test_helpers {
     use super::*;
     use rand::RngCore;
+    use zeroize::{Zeroize, Zeroizing};
+
+    const TEST_STREAM_BLOCK_SIZE: usize = 256;
+
+    pub struct DeterministicOutcome {
+        pub password: String,
+        pub swap_count: usize,
+        pub bytes_consumed: usize,
+    }
+
+    struct DeterministicByteStream<'a, R: RngCore> {
+        rng: &'a mut R,
+        cache: Zeroizing<[u8; TEST_STREAM_BLOCK_SIZE]>,
+        cursor: usize,
+        available: usize,
+        bytes_consumed: usize,
+    }
+
+    impl<'a, R: RngCore> DeterministicByteStream<'a, R> {
+        fn new(rng: &'a mut R) -> Self {
+            Self {
+                rng,
+                cache: Zeroizing::new([0u8; TEST_STREAM_BLOCK_SIZE]),
+                cursor: 0,
+                available: 0,
+                bytes_consumed: 0,
+            }
+        }
+
+        fn bytes_consumed(&self) -> usize {
+            self.bytes_consumed
+        }
+    }
+
+    impl<R: RngCore> ByteStream for DeterministicByteStream<'_, R> {
+        fn fill_next_block(&mut self) -> Result<()> {
+            self.rng.fill_bytes(self.cache.as_mut());
+            self.cursor = 0;
+            self.available = self.cache.len();
+            Ok(())
+        }
+
+        fn remaining_bytes(&self) -> &[u8] {
+            let end = self
+                .cursor
+                .saturating_add(self.available)
+                .min(self.cache.len());
+            &self.cache[self.cursor..end]
+        }
+
+        fn consume(&mut self, n: usize) {
+            let take = n.min(self.available);
+            self.cursor = (self.cursor + take).min(self.cache.len());
+            self.available = self.available.saturating_sub(take);
+            self.bytes_consumed += take;
+            if self.available == 0 {
+                self.cursor = 0;
+            }
+        }
+    }
+
+    impl<R: RngCore> Drop for DeterministicByteStream<'_, R> {
+        fn drop(&mut self) {
+            self.cache.as_mut().zeroize();
+            self.cursor = 0;
+            self.available = 0;
+        }
+    }
 
     pub fn assemble_random_password_with_rng(
         rng: &mut impl RngCore,
         all_vec: &[char],
         len: usize,
         req: &[Vec<char>],
-    ) -> Option<String> {
+    ) -> Option<DeterministicOutcome> {
         if all_vec.is_empty() {
             return None;
         }
 
-        let mut random_bytes = vec![0u8; len * 16];
-        rng.fill_bytes(&mut random_bytes);
-        let mut rng_adapter = BytesToIndexAdapter::new(&random_bytes);
+        let stream = DeterministicByteStream::new(rng);
+        let mut sampler = StreamingIndexSampler::new(stream);
+        let mut swaps = 0usize;
+        let password =
+            assemble_random_password_internal(&mut sampler, all_vec, len, req, Some(&mut swaps))?;
+        let stream = sampler.into_stream();
 
-        let need: Vec<char> = req
-            .iter()
-            .filter_map(|set| {
-                if set.is_empty() {
-                    return None;
-                }
-                let index = rng_adapter.next_index(set.len())?;
-                set.get(index).copied()
-            })
-            .collect();
-
-        if need.len() > len {
-            return None;
-        }
-        let rest = len - need.len();
-        let mut pwd: Vec<char> = need;
-        for _ in 0..rest {
-            if let Some(index) = rng_adapter.next_index(all_vec.len())
-                && let Some(&ch) = all_vec.get(index)
-            {
-                pwd.push(ch);
-            }
-        }
-        for i in (1..pwd.len()).rev() {
-            if let Some(j) = rng_adapter.next_index(i + 1) {
-                pwd.swap(i, j);
-            }
-        }
-        Some(pwd.iter().collect())
+        Some(DeterministicOutcome {
+            password,
+            swap_count: swaps,
+            bytes_consumed: stream.bytes_consumed(),
+        })
     }
 
     /// テスト用: 時間依存を避け、決定論的に評価関数/乱数で検証
@@ -398,7 +446,8 @@ pub mod test_helpers {
 
         while attempts < max_attempts {
             attempts += 1;
-            if let Some(candidate) = assemble_random_password_with_rng(rng, all_vec, len, req) {
+            if let Some(outcome) = assemble_random_password_with_rng(rng, all_vec, len, req) {
+                let candidate = outcome.password;
                 if candidate.len() != len {
                     continue;
                 }
@@ -424,5 +473,29 @@ pub mod test_helpers {
         }
 
         best_pwd.map(|pwd| (pwd, best_score, best_bits, false))
+    }
+
+    #[test]
+    fn fisher_yates_executes_all_swaps() {
+        use rand::SeedableRng;
+        use rand_chacha::ChaCha8Rng;
+
+        let all_vec: Vec<char> = (33u8..=126).map(char::from).collect();
+        let req = vec![
+            ('0'..='9').collect::<Vec<char>>(),
+            ('A'..='Z').collect::<Vec<char>>(),
+            ('a'..='z').collect::<Vec<char>>(),
+            vec!['!', '@', '#', '$', '%', '^'],
+        ];
+
+        let mut rng = ChaCha8Rng::from_seed([0x42; 32]);
+        let len = 32;
+
+        let outcome = assemble_random_password_with_rng(&mut rng, &all_vec, len, &req)
+            .expect("ランダムパスワード生成に失敗しました");
+
+        assert_eq!(outcome.password.len(), len);
+        assert_eq!(outcome.swap_count, len.saturating_sub(1));
+        assert!(outcome.bytes_consumed >= outcome.swap_count * std::mem::size_of::<u64>(),);
     }
 }
