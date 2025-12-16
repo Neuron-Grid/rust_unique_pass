@@ -159,6 +159,8 @@ async fn quiet_output_is_password_only() {
     let args = RupassArgs {
         language: None,
         password_length: Some(15),
+        all: false,
+        no_prompt: false,
         numbers: true,
         no_numbers: false,
         uppercase: true,
@@ -167,12 +169,12 @@ async fn quiet_output_is_password_only() {
         no_lowercase: false,
         symbols: true,
         no_symbols: false,
+        symbols_set: None,
         timeout_ms: 150,
         min_score: 2, // allow loose target for speed
         strict: false,
         show_strength: true, // should be ignored in quiet
         quiet: true,
-        max_attempts: 10_000,
     };
 
     let mut ui = MockUI::new(vec!["n", "n"]);
@@ -191,6 +193,8 @@ async fn show_strength_adds_line() {
     let args = RupassArgs {
         language: None,
         password_length: Some(15),
+        all: false,
+        no_prompt: false,
         numbers: true,
         no_numbers: false,
         uppercase: true,
@@ -199,12 +203,12 @@ async fn show_strength_adds_line() {
         no_lowercase: false,
         symbols: true,
         no_symbols: false,
+        symbols_set: None,
         timeout_ms: 150,
         min_score: 1,
         strict: false,
         show_strength: true,
         quiet: false,
-        max_attempts: 10_000,
     };
     let mut ui = MockUI::new(vec!["n", "n"]);
     generate_password_flow(&mut ui, &mock_bundle(), &args)

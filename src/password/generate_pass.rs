@@ -72,7 +72,6 @@ pub async fn generate_password_flow(
         args.timeout_ms,
         args.min_score,
         args.strict,
-        args.max_attempts,
     )
     .await;
 

@@ -9,11 +9,10 @@ pub struct RupassArgs {
     #[clap(
         short = 'l',
         long = "language",
+        short_alias = 'L',
         value_name = "LANGUAGE",
         help = "Specifies the language for user prompts and messages.\
-            \nSpecify the language code as defined by ISO639-3.\
-            \nSupported languages: Japanese, English, and German.\
-            \nDefault language: English"
+            \nDefault: English (eng). ISO639-3 codes: eng (en), jpn (ja), deu (de)."
     )]
     pub language: Option<String>,
 
@@ -23,22 +22,50 @@ pub struct RupassArgs {
         long = "password-length",
         value_name = "PASSWORD_LENGTH",
         help = "Specify the length of the password. \
-            \nIf omitted, a default length is used."
+            \nDefault: prompt (interactive).\
+            \nWith --no-prompt you must specify this."
     )]
     pub password_length: Option<usize>,
+
+    // 文字種を全て有効化するショートカット
+    #[clap(
+        short = 'a',
+        long = "all",
+        conflicts_with_all = [
+            "no_numbers",
+            "no_uppercase",
+            "no_lowercase",
+            "no_symbols",
+        ],
+        help = "Enable all character classes: numbers, uppercase, lowercase, symbols.\
+            \nConflicts: --no-numbers, --no-uppercase, --no-lowercase, --no-symbols"
+    )]
+    pub all: bool,
+
+    // 対話を行わずデフォルト（OFF）のまま進める
+    #[clap(
+        long = "no-prompt",
+        help = "Disable all interactive questions.\
+            \nUnspecified character classes stay OFF.\
+            \nRequires specifying --password-length."
+    )]
+    pub no_prompt: bool,
 
     // 数字を含むかどうかのフラグ
     #[clap(
         short = 'n',
         long = "numbers",
-        help = "Include numbers in the password."
+        help = "Include numbers in the password.\
+            \nDefault: OFF.\
+            \nNegative form available: --no-numbers (-N)."
     )]
     pub numbers: bool,
 
     // 数字を使用しないフラグ
     #[clap(
+        short = 'N',
         long = "no-numbers",
-        help = "Exclude numbers from the password.",
+        help = "Exclude numbers from the password (alias of not setting --numbers).",
         conflicts_with = "numbers"
     )]
     pub no_numbers: bool,
@@ -47,14 +74,17 @@ pub struct RupassArgs {
     #[clap(
         short = 'u',
         long = "uppercase",
-        help = "Include uppercase letters in the password."
+        help = "Include uppercase letters in the password.\
+            \nDefault: OFF.\
+            \nNegative form available: --no-uppercase (-U)."
     )]
     pub uppercase: bool,
 
     // 大文字を使用しないフラグ
     #[clap(
+        short = 'U',
         long = "no-uppercase",
-        help = "Exclude uppercase letters from the password.",
+        help = "Exclude uppercase letters from the password (alias of not setting --uppercase).",
         conflicts_with = "uppercase"
     )]
     pub no_uppercase: bool,
@@ -63,14 +93,17 @@ pub struct RupassArgs {
     #[clap(
         short = 'w',
         long = "lowercase",
-        help = "Include lowercase letters in the password."
+        help = "Include lowercase letters in the password.\
+            \nDefault: OFF.\
+            \nNegative form available: --no-lowercase (-W)."
     )]
     pub lowercase: bool,
 
     // 小文字を使用しないフラグ
     #[clap(
+        short = 'W',
         long = "no-lowercase",
-        help = "Exclude lowercase letters from the password.",
+        help = "Exclude lowercase letters from the password (alias of not setting --lowercase).",
         conflicts_with = "lowercase"
     )]
     pub no_lowercase: bool,
@@ -80,18 +113,31 @@ pub struct RupassArgs {
         short = 's',
         long = "symbols",
         help = "Include symbols in passwords.\
-        \nBy default, the symbols ~!@#$%^&*_-+=(){}[]:;<>,.?/ are used.\
-        \nYou can change which special symbols are used."
+        \nDefault: OFF.\
+        \nBy default uses ~!@#$%^&*_-+=(){}[]:;<>,.?/.\
+        \nNegative form available: --no-symbols (-S)."
     )]
     pub symbols: bool,
 
     // 特殊記号を使用しないフラグ
     #[clap(
+        short = 'S',
         long = "no-symbols",
-        help = "Exclude symbols from the password.",
+        help = "Exclude symbols from the password (alias of not setting --symbols).",
         conflicts_with = "symbols"
     )]
     pub no_symbols: bool,
+
+    // カスタム特殊記号セット
+    #[clap(
+        long = "symbols-set",
+        value_name = "SYMBOLS_SET",
+        help = "Custom set of symbols to use with --symbols (non-empty string).",
+        requires = "symbols",
+        conflicts_with = "no_symbols",
+        value_parser = clap::builder::NonEmptyStringValueParser::new()
+    )]
+    pub symbols_set: Option<String>,
 
     // 強度探索の時間予算（ミリ秒）
     #[clap(
@@ -137,16 +183,6 @@ pub struct RupassArgs {
         help = "Quiet (porcelain) output: print only the password on success"
     )]
     pub quiet: bool,
-
-    // 最大試行回数の安全装置
-    #[clap(
-        long = "max-attempts",
-        value_name = "MAX_ATTEMPTS",
-        default_value_t = 1_000_000u64,
-        value_parser = clap::value_parser!(u64).range(1..),
-        help = "Safety guard: maximum attempts before giving up. Default: 1,000,000"
-    )]
-    pub max_attempts: u64,
 }
 
 /// # Overview

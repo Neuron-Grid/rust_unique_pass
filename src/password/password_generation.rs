@@ -52,8 +52,8 @@ impl PasswordStrengthEvaluator for ZxcvbnEvaluator {
 }
 
 /// # Overview
-/// 指定の時間予算と最大試行回数の範囲で、zxcvbnスコア/エントロピーに基づいて
-/// パスワードを探索します。`min_score` 到達で早期終了します。
+/// 指定の時間予算内で、zxcvbnスコア/エントロピーに基づいてパスワードを探索します。
+/// `min_score` 到達で早期終了します。
 pub async fn produce_password_within_time(
     all_vec: &[char],
     req: &[Vec<char>],
@@ -61,7 +61,6 @@ pub async fn produce_password_within_time(
     timeout_ms: u64,
     min_score: u8,
     strict: bool,
-    max_attempts: u64,
 ) -> Result<GenerationOutcome> {
     validate_password_length(len)?;
     if all_vec.is_empty() {
@@ -78,7 +77,7 @@ pub async fn produce_password_within_time(
     let mut best_score: u8 = 0;
     let mut best_bits: f64 = 0.0;
 
-    while attempts < max_attempts {
+    loop {
         attempts += 1;
 
         if let Some(mut candidate) = assemble_random_password(all_vec, len, req).await {

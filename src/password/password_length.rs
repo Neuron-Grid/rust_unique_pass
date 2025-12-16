@@ -47,6 +47,10 @@ pub async fn get_password_length(
         validate_password_length(len)?;
         return Ok(len);
     }
+    // 非対話モードでは長さ必須
+    if args.no_prompt {
+        return Err(GenerationError::InvalidLength);
+    }
     // 翻訳済みメッセージを先に生成
     let prompt = crate::core::utils::fallback_translation(
         bundle,

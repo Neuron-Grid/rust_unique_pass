@@ -87,6 +87,8 @@ async fn normal_flow() {
     let args = RupassArgs {
         language: None,
         password_length: Some(15),
+        all: false,
+        no_prompt: false,
         numbers: true,
         no_numbers: false,
         uppercase: true,
@@ -95,12 +97,12 @@ async fn normal_flow() {
         no_lowercase: false,
         symbols: false,
         no_symbols: false,
+        symbols_set: None,
         timeout_ms: 150,
         min_score: 4,
         strict: false,
         show_strength: false,
         quiet: false,
-        max_attempts: 1_000_000,
     };
 
     // lowercase? → "n"だけ回答
@@ -121,6 +123,8 @@ async fn too_short_interactive() {
     let args = RupassArgs {
         language: None,
         password_length: None,
+        all: false,
+        no_prompt: false,
         numbers: false,
         no_numbers: false,
         uppercase: false,
@@ -129,12 +133,12 @@ async fn too_short_interactive() {
         no_lowercase: false,
         symbols: false,
         no_symbols: false,
+        symbols_set: None,
         timeout_ms: 150,
         min_score: 4,
         strict: false,
         show_strength: false,
         quiet: false,
-        max_attempts: 1_000_000,
     };
 
     // ①10 → too short ②14 → too short ③15 → OK
@@ -159,6 +163,8 @@ async fn too_short_args() {
         language: None,
         // 不正
         password_length: Some(10),
+        all: false,
+        no_prompt: false,
         numbers: true,
         no_numbers: false,
         uppercase: true,
@@ -167,12 +173,12 @@ async fn too_short_args() {
         no_lowercase: false,
         symbols: false,
         no_symbols: false,
+        symbols_set: None,
         timeout_ms: 150,
         min_score: 4,
         strict: false,
         show_strength: false,
         quiet: false,
-        max_attempts: 1_000_000,
     };
     let mut ui = MockUI::default();
     let err = generate_password_flow(&mut ui, &mock_bundle(), &args)
@@ -186,6 +192,8 @@ async fn no_charset() {
     let args = RupassArgs {
         language: None,
         password_length: Some(15),
+        all: false,
+        no_prompt: false,
         numbers: false,
         no_numbers: false,
         uppercase: false,
@@ -194,12 +202,12 @@ async fn no_charset() {
         no_lowercase: false,
         symbols: false,
         no_symbols: false,
+        symbols_set: None,
         timeout_ms: 150,
         min_score: 4,
         strict: false,
         show_strength: false,
         quiet: false,
-        max_attempts: 1_000_000,
     };
     // uppercase? n / lowercase? n / numbers? n / symbols? n
     let mut ui = MockUI::new(vec!["n", "n", "n", "n"]);
@@ -222,12 +230,14 @@ async fn custom_symbols() {
         no_lowercase: false,
         symbols: false,
         no_symbols: false,
+        symbols_set: None,
         timeout_ms: 150,
         min_score: 4,
         strict: false,
         show_strength: false,
         quiet: false,
-        max_attempts: 1_000_000,
+        all: false,
+        no_prompt: false,
     };
     // symbols? y → change? y → enter custom set
     let mut ui = MockUI::new(vec!["y", "y", "!?@#$%^&*()"]);
@@ -239,6 +249,37 @@ async fn custom_symbols() {
     let pwd = extract_password(&out).expect("password not found");
     assert_eq!(pwd.len(), 15);
     assert!(pwd.chars().any(|c| "!?@#$%^&*()".contains(c)));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn custom_symbols_via_option() {
+    let args = RupassArgs {
+        language: None,
+        password_length: Some(16),
+        numbers: true,
+        no_numbers: false,
+        uppercase: true,
+        no_uppercase: false,
+        lowercase: true,
+        no_lowercase: false,
+        symbols: true,
+        no_symbols: false,
+        symbols_set: Some("[]{}".to_string()),
+        timeout_ms: 150,
+        min_score: 4,
+        strict: false,
+        show_strength: false,
+        quiet: false,
+        all: false,
+        no_prompt: false,
+    };
+    let mut ui = MockUI::default();
+    generate_password_flow(&mut ui, &mock_bundle(), &args)
+        .await
+        .expect("generation should succeed with custom symbols option");
+    let out = ui.outputs_joined();
+    let pwd = extract_password(&out).expect("password not found");
+    assert!(pwd.chars().any(|c| "[]{}".contains(c)));
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -254,12 +295,14 @@ async fn negative_flags_skip_prompts() {
         no_lowercase: false,
         symbols: false,
         no_symbols: true,
+        symbols_set: None,
         timeout_ms: 150,
         min_score: 4,
         strict: false,
         show_strength: false,
         quiet: false,
-        max_attempts: 1_000_000,
+        all: false,
+        no_prompt: false,
     };
     // 否定フラグにより対話無しで進行するはず
     let mut ui = MockUI::default();

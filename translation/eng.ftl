@@ -14,9 +14,9 @@ error_bundle_load = "Could not load translation package."
 error_generation = "Error generating password."
 
 # Questions and prompts
-error_no_charset_selected  = "Error: No valid character set selected.
- To select a character set, answer y or yes to at least one question.
- Please run again and follow the instructions."
+error_no_charset_selected  = "Error: No character set selected.
+ Specify at least one of --numbers (-n), --uppercase (-u), --lowercase (-w), --symbols (-s), or --all.
+ In non-interactive mode (--no-prompt), these flags are required."
 question_change_special_chars = "Change the special characters used?"
 question_enter_special_chars = "Enter special characters to use. (e.g. !@#|¥)"
 question_lowercase = "Include lowercase letters?"

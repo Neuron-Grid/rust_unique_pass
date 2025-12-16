@@ -42,9 +42,17 @@ pub async fn assemble_character_set(
     args: &RupassArgs,
 ) -> Result<(String, Vec<String>)> {
     let (base, req) = assemble_flag_based_charset(args);
-    let (mut charset, mut req_sets) =
-        ask_user_for_additional_sets(ui, bundle, args, base, req).await?;
-    let special = handle_special_characters(ui, bundle, args).await?;
+    let (mut charset, mut req_sets) = if args.no_prompt {
+        (base, req)
+    } else {
+        ask_user_for_additional_sets(ui, bundle, args, base, req).await?
+    };
+
+    let special = if args.no_prompt {
+        handle_special_characters_no_prompt(args)
+    } else {
+        handle_special_characters(ui, bundle, args).await
+    }?;
     if !special.is_empty() {
         charset.push_str(&special);
         req_sets.push(special);
@@ -81,6 +89,18 @@ pub async fn assemble_character_set(
 /// # Returns
 /// フラグに基づいて組み立てられた文字セット (`String`) と、必須文字セットのリスト (`Vec<String>`) を含むタプルを返します。
 fn assemble_flag_based_charset(args: &RupassArgs) -> (String, Vec<String>) {
+    // --all が指定されている場合は全セットを有効化
+    if args.all {
+        return (
+            "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz".to_string(),
+            vec![
+                "0123456789".to_string(),
+                "ABCDEFGHIJKLMNOPQRSTUVWXYZ".to_string(),
+                "abcdefghijklmnopqrstuvwxyz".to_string(),
+            ],
+        );
+    }
+
     let init = (String::new(), Vec::new());
     [
         (args.numbers, "0123456789"),
@@ -192,6 +212,14 @@ async fn handle_special_characters(
         return Ok(String::new());
     }
 
+    if args.all {
+        return Ok(DEFAULT_SPECIAL_CHARS.to_owned());
+    }
+
+    if let Some(custom) = args.symbols_set.as_ref() {
+        return Ok(custom.clone());
+    }
+
     if args.symbols {
         return Ok(DEFAULT_SPECIAL_CHARS.to_owned());
     }
@@ -218,6 +246,27 @@ async fn handle_special_characters(
     } else {
         Ok(String::new())
     }
+}
+
+// 非対話モード用: yes/no を尋ねずに決定する
+fn handle_special_characters_no_prompt(args: &RupassArgs) -> Result<String> {
+    if args.no_symbols {
+        return Ok(String::new());
+    }
+
+    if args.all {
+        return Ok(DEFAULT_SPECIAL_CHARS.to_owned());
+    }
+
+    if let Some(custom) = args.symbols_set.as_ref() {
+        return Ok(custom.clone());
+    }
+
+    if args.symbols || args.all {
+        return Ok(DEFAULT_SPECIAL_CHARS.to_owned());
+    }
+
+    Ok(String::new())
 }
 
 /// # Overview

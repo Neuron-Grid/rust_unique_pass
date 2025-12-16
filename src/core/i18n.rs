@@ -43,6 +43,18 @@ fn get_embedded_resource(filename: &str) -> Option<String> {
 }
 
 /// # Overview
+/// 異なるフォーマットの言語コードを翻訳ファイルに対応する正規化コードへ変換します。
+fn canonical_language_code(code: &str) -> String {
+    let lower = code.trim().to_ascii_lowercase();
+    match lower.as_str() {
+        "en" | "eng" => "eng".to_owned(),
+        "ja" | "jp" | "jpn" => "jpn".to_owned(),
+        "de" | "deu" | "ger" => "deu".to_owned(),
+        _ => lower,
+    }
+}
+
+/// # Overview
 /// 言語コード文字列を `fluent` クレートで使用される [`LanguageIdentifier`] に変換します。
 ///
 /// # Arguments
@@ -53,8 +65,11 @@ fn get_embedded_resource(filename: &str) -> Option<String> {
 ///
 /// # Errors
 /// 指定された言語コードが [`LanguageIdentifier`] として無効な場合、[`GenerationError::UnsupportedLanguage`] を含む [`Result`] を返します。
-fn map_to_fluent_code(code: &str) -> Result<LanguageIdentifier> {
-    LanguageIdentifier::from_str(code).map_err(|_| GenerationError::UnsupportedLanguage)
+fn map_to_fluent_code(code: &str) -> Result<(LanguageIdentifier, String)> {
+    let canonical = canonical_language_code(code);
+    let langid = LanguageIdentifier::from_str(&canonical)
+        .map_err(|_| GenerationError::UnsupportedLanguage)?;
+    Ok((langid, canonical))
 }
 
 /// # Overview
@@ -67,10 +82,12 @@ fn map_to_fluent_code(code: &str) -> Result<LanguageIdentifier> {
 /// # Returns
 /// 解決された言語コードを含む [`String`] を返します。
 fn resolve_language(args: &RupassArgs) -> String {
-    args.language
+    let raw = args
+        .language
         .as_ref()
         .map(|l| l.to_string())
-        .unwrap_or_else(|| DEFAULT_LANGUAGE.to_string())
+        .unwrap_or_else(|| DEFAULT_LANGUAGE.to_string());
+    canonical_language_code(&raw)
 }
 
 /// # Overview
@@ -87,8 +104,8 @@ fn resolve_language(args: &RupassArgs) -> String {
 /// 指定された言語のリソースが見つからない場合、[`GenerationError::UnsupportedLanguage`] を含む [`Result`] を返します。
 /// リソースのパースに失敗した場合、[`GenerationError::ResourceParseError`] を含む [`Result`] を返します。
 fn load_fluent_bundle(language: &str) -> Result<FluentBundle<FluentResource>> {
-    let langid = map_to_fluent_code(language)?;
-    let resource_filename = format!("{langid}.ftl");
+    let (langid, canonical) = map_to_fluent_code(language)?;
+    let resource_filename = format!("{canonical}.ftl");
 
     let ftl_string =
         get_embedded_resource(&resource_filename).ok_or(GenerationError::UnsupportedLanguage)?;

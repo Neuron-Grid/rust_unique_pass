@@ -19,7 +19,7 @@ use rust_unique_pass::{GenerationError, RupassArgs, get_translation, initialize_
 /// ショートエイリアス（-lや-pなど）のテスト
 #[test]
 fn test_parse_args_short_aliases() {
-    let args = vec!["test_app", "-l", "eng", "-p", "20", "-n", "-u", "-w", "-s"];
+    let args = vec!["test_app", "-L", "eng", "-p", "20", "-n", "-u", "-w", "-s"];
     let parsed = parse_args_from_iter(args);
     assert_eq!(parsed.language.as_deref(), Some("eng"));
     assert_eq!(parsed.password_length, Some(20));
@@ -64,6 +64,8 @@ fn test_initialize_bundle_unsupported_language() {
     let args = RupassArgs {
         language: Some("xxx".to_string()),
         password_length: None,
+        all: false,
+        no_prompt: false,
         numbers: false,
         no_numbers: false,
         uppercase: false,
@@ -72,12 +74,12 @@ fn test_initialize_bundle_unsupported_language() {
         no_lowercase: false,
         symbols: false,
         no_symbols: false,
+        symbols_set: None,
         timeout_ms: 150,
         min_score: 4,
         strict: false,
         show_strength: false,
         quiet: false,
-        max_attempts: 1_000_000,
     };
     let result = initialize_bundle(&args);
     assert!(matches!(result, Err(GenerationError::UnsupportedLanguage)));
@@ -89,6 +91,8 @@ fn test_get_translation_missing_key() {
     let args = RupassArgs {
         language: None,
         password_length: None,
+        all: false,
+        no_prompt: false,
         numbers: false,
         no_numbers: false,
         uppercase: false,
@@ -97,12 +101,12 @@ fn test_get_translation_missing_key() {
         no_lowercase: false,
         symbols: false,
         no_symbols: false,
+        symbols_set: None,
         timeout_ms: 150,
         min_score: 4,
         strict: false,
         show_strength: false,
         quiet: false,
-        max_attempts: 1_000_000,
     };
     // デフォルト言語(eng)でロード
     let bundle = initialize_bundle(&args).expect("Should load default eng resource");
@@ -116,6 +120,8 @@ fn test_get_translation_with_args() {
     let args = RupassArgs {
         language: None,
         password_length: None,
+        all: false,
+        no_prompt: false,
         numbers: false,
         no_numbers: false,
         uppercase: false,
@@ -124,12 +130,12 @@ fn test_get_translation_with_args() {
         no_lowercase: false,
         symbols: false,
         no_symbols: false,
+        symbols_set: None,
         timeout_ms: 150,
         min_score: 4,
         strict: false,
         show_strength: false,
         quiet: false,
-        max_attempts: 1_000_000,
     };
     let bundle = initialize_bundle(&args).expect("Should load default eng resource");
 
@@ -160,6 +166,8 @@ fn test_initialize_bundle_jpn() {
     let args = RupassArgs {
         language: Some("jpn".to_string()),
         password_length: None,
+        all: false,
+        no_prompt: false,
         numbers: false,
         no_numbers: false,
         uppercase: false,
@@ -168,12 +176,12 @@ fn test_initialize_bundle_jpn() {
         no_lowercase: false,
         symbols: false,
         no_symbols: false,
+        symbols_set: None,
         timeout_ms: 150,
         min_score: 4,
         strict: false,
         show_strength: false,
         quiet: false,
-        max_attempts: 1_000_000,
     };
 
     // jpn.ftl がちゃんと埋め込まれていればロードできるはず
@@ -191,12 +199,14 @@ fn test_initialize_bundle_jpn() {
     );
 }
 
-/// 新規テスト2: jpn翻訳でのエラーメッセージ比較
+/// ISO639-1コードのエイリアスでも英語リソースを取得できることを確認
 #[test]
-fn test_jpn_translation_error_message() {
+fn test_initialize_bundle_en_alias() {
     let args = RupassArgs {
-        language: Some("jpn".to_string()),
+        language: Some("en".to_string()),
         password_length: None,
+        all: false,
+        no_prompt: false,
         numbers: false,
         no_numbers: false,
         uppercase: false,
@@ -205,12 +215,46 @@ fn test_jpn_translation_error_message() {
         no_lowercase: false,
         symbols: false,
         no_symbols: false,
+        symbols_set: None,
         timeout_ms: 150,
         min_score: 4,
         strict: false,
         show_strength: false,
         quiet: false,
-        max_attempts: 1_000_000,
+    };
+
+    let bundle =
+        initialize_bundle(&args).expect("Should load eng resource when en alias is specified");
+    let message =
+        get_translation(&bundle, "generated_password", None).expect("Key should exist in eng.ftl");
+    assert!(
+        message.contains("Password Generation Result"),
+        "English translation should be returned for alias en"
+    );
+}
+
+/// 新規テスト2: jpn翻訳でのエラーメッセージ比較
+#[test]
+fn test_jpn_translation_error_message() {
+    let args = RupassArgs {
+        language: Some("jpn".to_string()),
+        password_length: None,
+        all: false,
+        no_prompt: false,
+        numbers: false,
+        no_numbers: false,
+        uppercase: false,
+        no_uppercase: false,
+        lowercase: false,
+        no_lowercase: false,
+        symbols: false,
+        no_symbols: false,
+        symbols_set: None,
+        timeout_ms: 150,
+        min_score: 4,
+        strict: false,
+        show_strength: false,
+        quiet: false,
     };
 
     let bundle = initialize_bundle(&args).expect("Failed to load jpn resource");
@@ -229,6 +273,8 @@ fn test_compare_eng_and_jpn_translations() {
     let eng_args = RupassArgs {
         language: Some("eng".to_string()),
         password_length: None,
+        all: false,
+        no_prompt: false,
         numbers: false,
         no_numbers: false,
         uppercase: false,
@@ -237,16 +283,18 @@ fn test_compare_eng_and_jpn_translations() {
         no_lowercase: false,
         symbols: false,
         no_symbols: false,
+        symbols_set: None,
         timeout_ms: 150,
         min_score: 4,
         strict: false,
         show_strength: false,
         quiet: false,
-        max_attempts: 1_000_000,
     };
     let jpn_args = RupassArgs {
         language: Some("jpn".to_string()),
         password_length: None,
+        all: false,
+        no_prompt: false,
         numbers: false,
         no_numbers: false,
         uppercase: false,
@@ -255,12 +303,12 @@ fn test_compare_eng_and_jpn_translations() {
         no_lowercase: false,
         symbols: false,
         no_symbols: false,
+        symbols_set: None,
         timeout_ms: 150,
         min_score: 4,
         strict: false,
         show_strength: false,
         quiet: false,
-        max_attempts: 1_000_000,
     };
 
     let eng_bundle = initialize_bundle(&eng_args).expect("Failed to load eng resource");
@@ -276,14 +324,13 @@ fn test_compare_eng_and_jpn_translations() {
         eng_text, jpn_text,
         "English and Japanese messages for the same key should differ"
     );
-    // 簡易的な確認: 英文は "Error: No valid character set selected..."、日本語は「エラー: 有効な文字セットが選択されていません...」
-    // どちらかに固有っぽいフレーズを含んでいればOK
+    // 簡易的な確認: 英文は "Error: No character set selected" を含み、日本語は「文字セットが選択されていません」を含むこと
     assert!(
-        eng_text.contains("Error: No valid character set"),
+        eng_text.contains("Error: No character set selected"),
         "English error_no_charset_selected should contain the English phrase"
     );
     assert!(
-        jpn_text.contains("エラー: 有効な文字セットが選択されていません"),
+        jpn_text.contains("エラー: 文字セットが選択されていません"),
         "Japanese error_no_charset_selected should contain the Japanese phrase"
     );
 }
@@ -295,6 +342,8 @@ fn test_default_language_is_eng() {
     let args = RupassArgs {
         language: None,
         password_length: None,
+        all: false,
+        no_prompt: false,
         numbers: false,
         no_numbers: false,
         uppercase: false,
@@ -303,12 +352,12 @@ fn test_default_language_is_eng() {
         no_lowercase: false,
         symbols: false,
         no_symbols: false,
+        symbols_set: None,
         timeout_ms: 150,
         min_score: 4,
         strict: false,
         show_strength: false,
         quiet: false,
-        max_attempts: 1_000_000,
     };
     let bundle =
         initialize_bundle(&args).expect("Should load default eng resource if none specified");

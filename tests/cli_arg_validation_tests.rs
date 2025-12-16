@@ -28,3 +28,19 @@ fn porcelain_alias_for_quiet() {
     let res = RupassArgs::try_parse_from(["rupass", "--porcelain"]).unwrap();
     assert!(res.quiet);
 }
+
+#[test]
+fn symbols_set_requires_symbols_flag() {
+    let res = RupassArgs::try_parse_from(["rupass", "--symbols-set", "!@#"]);
+    assert!(
+        res.is_err(),
+        "--symbols-set without --symbols should be rejected"
+    );
+}
+
+#[test]
+fn symbols_set_with_symbols_parses() {
+    let res = RupassArgs::try_parse_from(["rupass", "--symbols", "--symbols-set", "!@#"]).unwrap();
+    assert!(res.symbols);
+    assert_eq!(res.symbols_set.as_deref(), Some("!@#"));
+}

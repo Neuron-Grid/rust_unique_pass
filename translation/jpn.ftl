@@ -15,9 +15,9 @@ error_password_too_short = "パスワードは15文字以上を推奨します�
 error_generation = "パスワードの生成時にエラーが発生しました。"
 
 # 質問とプロンプト
-error_no_charset_selected = "エラー: 有効な文字セットが選択されていません。
- 最低でも1つの質問に「y」または「はい」と回答して、文字セットを選択してください。
- 再度実行し、指示に従ってください。"
+error_no_charset_selected = "エラー: 文字セットが選択されていません。
+ --numbers(-n), --uppercase(-u), --lowercase(-w), --symbols(-s)、または --all を指定してください。
+ 非対話モード(--no-prompt)ではこれらのフラグ指定が必須です。"
 question_enter_special_chars = "使用する特殊文字を入力してください (例 = !@#|¥)"
 question_password_length = "パスワードの長さを入力してください。
  15文字以上を推奨します。"

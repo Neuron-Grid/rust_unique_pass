@@ -26,26 +26,26 @@ is `rupass`.
 
 `rupass` provides several command-line options to control password generation.
 
-| Option (Short) | Option (Long)       | Description                                                                                   |
-| :------------- | :------------------ | :-------------------------------------------------------------------------------------------- |
-| `-l`           | `--language`        | Specifies the language for prompts and messages. (`jpn`, `eng`, `deu`)                        |
-| `-p`           | `--password-length` | Specifies the length of the password to be generated.                                         |
-| `-n`           | `--numbers`         | Include numbers in the password.                                                              |
-|                | `--no-numbers`      | Exclude numbers from the password.                                                            |
-| `-u`           | `--uppercase`       | Include uppercase letters in the password.                                                    |
-|                | `--no-uppercase`    | Exclude uppercase letters from the password.                                                  |
-| `-w`           | `--lowercase`       | Include lowercase letters in the password.                                                    |
-|                | `--no-lowercase`    | Exclude lowercase letters from the password.                                                  |
-| `-s`           | `--symbols`         | Include symbols in the password.                                                              |
-|                | `--no-symbols`      | Exclude symbols from the password.                                                            |
-|                | `--timeout-ms`      | Time budget for strength search in milliseconds (alias: `--budget-ms`). Default: `150` (>=10) |
-|                | `--min-score`       | Early-stop target score (0..=4). Default: `4`                                                 |
-|                | `--strict`          | Strict mode. Fail (exit 3) if target score not reached within budget                          |
-|                | `--show-strength`   | Show strength line (score and entropy) on success                                             |
-|                | `--quiet`           | Quiet/porcelain mode. Only print the password to stdout; suppress headings and warnings       |
-|                | `--max-attempts`    | Safety guard: maximum attempts before giving up. Default: `1,000,000`                         |
+| Option (Short) | Option (Long) | Description |
+| :-- | :-- | :-- |
+| `-l` | `--language` | Language for prompts/messages (`eng` default, also `jpn`, `deu`). |
+| `-p` | `--password-length` | Password length. Required when `--no-prompt` is used. |
+| `-a` | `--all` | Enable all character classes (numbers, uppercase, lowercase, symbols). |
+|  | `--no-prompt` | Non-interactive: skip all questions; unspecified classes stay OFF (errors if none chosen). |
+| `-n` | `--numbers` / `--no-numbers` | Include / exclude numbers (default OFF). |
+| `-u` | `--uppercase` / `--no-uppercase` | Include / exclude uppercase (default OFF). |
+| `-w` | `--lowercase` / `--no-lowercase` | Include / exclude lowercase (default OFF). |
+| `-s` | `--symbols` / `--no-symbols` | Include / exclude symbols (default OFF; default set `~!@#$%^&*_-+=(){}[]:;<>,.?/`). |
+|  | `--symbols-set` | Custom symbols set to use with `--symbols`. |
+|  | `--timeout-ms` (`--budget-ms`) | Time budget for strength search (>=10). Default: `150`. *Advanced* |
+|  | `--min-score` | Early-stop target score (0..=4). Default: `4`. *Advanced* |
+|  | `--strict` | Fail (exit 3) if target not reached within budget. *Advanced* |
+|  | `--show-strength` | Print strength (score/entropy) on success. |
+|  | `--quiet` (`--porcelain`) | Output password only; suppress headings/warnings. *Advanced* |
 
 **Command Examples:**
+
+- If you specify nothing, all character classes start OFF and the CLI will ask interactively. With `--no-prompt`, you must provide `--password-length` and at least one class flag (e.g., `--numbers` or `--all`), otherwise it errors.
 
 - Generate a 32-character password including numbers, uppercase, lowercase, and
   symbols:
