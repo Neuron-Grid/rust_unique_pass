@@ -13,7 +13,8 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 use rust_unique_pass::{
-    GenerationError, Result, StdioInterface, generate_password_flow, initialize_bundle, parse_args,
+    GenerationError, Result, StdioInterface, exit_code_for_error, generate_password_flow,
+    initialize_bundle, parse_args,
 };
 
 /// # Overview
@@ -40,12 +41,11 @@ async fn main() -> Result<()> {
             // 1: 生成失敗/内部I/O 等の一般エラー
             // 2: 引数バリデーションエラー (clap が処理)
             // 3: strict未達
-            let code = match e {
-                GenerationError::StrictTargetUnmet => 3,
-                _ => 1,
-            };
-            // エラーはstderrに印字し、終了コードを返す
-            eprintln!("{}", e);
+            let code = exit_code_for_error(&e);
+            // 生成フロー側で既に表示済みの strict 未達以外は stderr に通知する
+            if !matches!(e, GenerationError::StrictTargetUnmet) {
+                eprintln!("{e}");
+            }
             std::process::exit(code);
         }
     }

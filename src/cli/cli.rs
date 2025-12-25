@@ -1,4 +1,4 @@
-use clap::Parser;
+use {crate::password::password_generation::MAX_TIMEOUT_MS, clap::Parser};
 
 /// # Overview
 /// コマンドライン引数を定義する構造体。
@@ -145,10 +145,10 @@ pub struct RupassArgs {
         alias = "budget-ms",
         value_name = "TIMEOUT_MS",
         default_value_t = 150u64,
-        value_parser = clap::value_parser!(u64).range(10..),
+        value_parser = clap::value_parser!(u64).range(10..=MAX_TIMEOUT_MS),
         help = "Time budget in milliseconds for strength search.\
             \nAlias: --budget-ms.\
-            \nMust be >= 10. Default: 150"
+            \nMust be between 10 and 3600000. Default: 150"
     )]
     pub timeout_ms: u64,
 

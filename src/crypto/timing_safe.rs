@@ -18,8 +18,8 @@ limitations under the License. */
 /// 本モジュールはタイミング攻撃・キャッシュ攻撃・電力解析攻撃などのサイドチャネル攻撃対策を目的とした各種セキュア操作を提供します。
 ///
 /// ## セキュリティ設計方針
-/// - すべての比較・選択・シャッフル操作は定時間で実行
-/// - キャッシュ・電力パターンのノイズ挿入
+/// - 比較・選択・シャッフルは可能な範囲で定時間に近づける
+/// - 固定回数の処理でタイミング差を平坦化し、必要に応じて一様性を優先
 /// - subtleクレート等の業界標準技術を活用
 ///
 use rand::RngCore;
@@ -30,6 +30,8 @@ use subtle::{Choice, ConstantTimeEq};
 pub struct TimingSafeOps;
 
 impl TimingSafeOps {
+    const HYBRID_ATTEMPTS: usize = 8;
+
     /// 定時間文字選択
     ///
     /// # セキュリティ
@@ -123,9 +125,9 @@ impl TimingSafeOps {
     /// セキュアなインデックス生成
     ///
     /// # セキュリティ
-    /// - モジュロバイアスを排除したインデックス生成
-    /// - 定時間性を維持するため、常に同じ処理を実行
-    /// - タイミング攻撃・バイアス攻撃を防止
+    /// - 固定回数の試行で定時間性を重視しつつ、失敗時は一様性を優先するハイブリッド方式
+    /// - ハイブリッドで候補が得られない場合はリジェクションサンプリングでバイアス排除を優先
+    /// - 定時間性は近似であり、厳密保証ではない
     pub fn secure_random_index(rng: &mut impl RngCore, max: usize) -> usize {
         if max == 0 {
             return 0;
@@ -134,17 +136,36 @@ impl TimingSafeOps {
         // 2の累乗に切り上げ
         let mask = max.next_power_of_two() - 1;
 
-        // バイアスのない乱数生成
+        // ハイブリッド方式: 固定回数での候補探索（定時間に近づける）
+        let mut selected = 0usize;
+        let mut selected_flag = 0u8;
+
+        for _ in 0..Self::HYBRID_ATTEMPTS {
+            let mut bytes = [0u8; 8];
+            rng.fill_bytes(&mut bytes);
+            let random_value = usize::from_le_bytes(bytes);
+            let candidate = random_value & mask;
+            let valid = (candidate < max) as u8;
+            let take = valid & (selected_flag ^ 1);
+            let choose_mask = (take as usize).wrapping_neg();
+            selected = (selected & !choose_mask) | (candidate & choose_mask);
+            selected_flag |= valid;
+            Self::add_timing_noise();
+        }
+
+        if selected_flag == 1 {
+            return selected;
+        }
+
+        // フォールバック: バイアス排除を優先
         loop {
             let mut bytes = [0u8; 8];
             rng.fill_bytes(&mut bytes);
             let random_value = usize::from_le_bytes(bytes);
-            let masked_index = random_value & mask;
-            if masked_index < max {
-                return masked_index;
+            let candidate = random_value & mask;
+            if candidate < max {
+                return candidate;
             }
-            // リトライ
-            // 定時間性を保つため、常に同じ処理を実行
             Self::add_timing_noise();
         }
     }
@@ -159,14 +180,12 @@ impl TimingSafeOps {
     /// この関数はタイミング攻撃に対する耐性を提供しないため、セキュリティクリティカルな文脈での使用には注意が必要です。
     pub fn constant_time_concat(s1: &str, s2: &str, max_len: usize) -> String {
         let mut result = String::with_capacity(max_len);
-        let combined = format!("{s1}{s2}");
+        let mut iter = s1.chars().chain(s2.chars());
 
         // 常に最大長まで処理
-        for i in 0..max_len {
-            if i < combined.len() {
-                if let Some(ch) = combined.chars().nth(i) {
-                    result.push(ch);
-                }
+        for _ in 0..max_len {
+            if let Some(ch) = iter.next() {
+                result.push(ch);
             } else {
                 // パディング
                 // 実際には追加されない
@@ -180,9 +199,9 @@ impl TimingSafeOps {
     /// セキュアなシャッフル
     ///
     /// # セキュリティ
-    /// - Fisher-Yatesアルゴリズムを定時間・バイアスなしで実行
+    /// - Fisher-Yatesアルゴリズムを用い、定時間性に配慮したインデックス選択を行う
     /// - 各swap操作ごとにタイミングノイズを挿入
-    /// - タイミング攻撃・バイアス攻撃を防止
+    /// - 定時間性は近似であり、必要に応じて一様性を優先
     pub fn secure_shuffle<T: Clone>(items: &mut [T], rng: &mut impl RngCore) {
         let len = items.len();
 

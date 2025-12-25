@@ -20,7 +20,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use zeroize::{Zeroize, Zeroizing};
 
 /// グローバルRNGインスタンスの管理
-/// パフォーマンス向上と自動再シード機能を提供
+/// OS RNGの読み出しを共有し、統計と再取得タイミングを管理
 pub struct GlobalRng {
     rng: Arc<SecureRng>,
     output_counter: AtomicU64,
@@ -61,7 +61,7 @@ impl GlobalRng {
     }
 
     /// 指定されたバッファに乱数バイトを生成
-    /// 自動再シード機能付き
+    /// 統計に基づく再取得タイミング管理付き
     pub fn generate_bytes(&self, dest: &mut [u8]) -> AppResult<()> {
         // 再シード判定
         if self.should_reseed()? {
@@ -87,8 +87,8 @@ impl GlobalRng {
             .as_secs();
         let last_reseed = self.last_reseed.load(Ordering::Relaxed);
 
-        Ok(output_count >= self.reseed_threshold
-            || (current_time - last_reseed) >= Self::RESEED_TIME_THRESHOLD)
+        let elapsed = current_time.saturating_sub(last_reseed);
+        Ok(output_count >= self.reseed_threshold || elapsed >= Self::RESEED_TIME_THRESHOLD)
     }
 
     fn reseed(&self) -> AppResult<()> {
@@ -187,30 +187,31 @@ pub struct GlobalRngStatistics {
 }
 
 // シングルトンパターン（thread-safe）
-use std::sync::{Mutex, Once};
+use std::sync::Mutex;
 
 static GLOBAL_RNG: Mutex<Option<Arc<GlobalRng>>> = Mutex::new(None);
-static INIT: Once = Once::new();
 
 /// グローバルRNGインスタンスを取得
 pub fn get_global_rng() -> AppResult<Arc<GlobalRng>> {
-    INIT.call_once(|| {
-        if let Ok(rng) = GlobalRng::new()
-            && let Ok(mut guard) = GLOBAL_RNG.lock()
-        {
-            *guard = Some(Arc::new(rng));
+    let mut guard = match GLOBAL_RNG.lock() {
+        Ok(guard) => guard,
+        Err(poison) => {
+            let mut guard = poison.into_inner();
+            if let Some(rng) = guard.as_ref() {
+                if rng.reseed().is_ok() {
+                    return Ok(rng.clone());
+                }
+                *guard = None;
+            }
+            guard
         }
-    });
+    };
 
-    let guard = GLOBAL_RNG.lock().map_err(|_| {
-        crate::core::app_errors::GenerationError::IoError(std::io::Error::other(
-            "Global RNG mutex poisoned",
-        ))
-    })?;
+    if let Some(rng) = guard.as_ref() {
+        return Ok(rng.clone());
+    }
 
-    guard.clone().ok_or_else(|| {
-        crate::core::app_errors::GenerationError::IoError(std::io::Error::other(
-            "Failed to initialize global RNG",
-        ))
-    })
+    let rng = Arc::new(GlobalRng::new()?);
+    *guard = Some(rng.clone());
+    Ok(rng)
 }

@@ -18,7 +18,7 @@ error_no_charset_selected  = "Error: No character set selected.
  Specify at least one of --numbers (-n), --uppercase (-u), --lowercase (-w), --symbols (-s), or --all.
  In non-interactive mode (--no-prompt), these flags are required."
 question_change_special_chars = "Change the special characters used?"
-question_enter_special_chars = "Enter special characters to use. (e.g. !@#|¥)"
+question_enter_special_chars = "Enter special characters to use. (e.g. !@#|$)"
 question_lowercase = "Include lowercase letters?"
 question_numbers = "Include numbers?"
 question_password_length = "Please enter a password length.

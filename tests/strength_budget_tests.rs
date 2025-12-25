@@ -5,7 +5,7 @@ use rand_chacha::ChaCha8Rng;
 use rust_unique_pass::cli::UserInterface;
 use rust_unique_pass::core::app_errors::{GenerationError, Result};
 use rust_unique_pass::password::password_generation::PasswordStrengthEvaluator;
-use rust_unique_pass::{RupassArgs, generate_password_flow};
+use rust_unique_pass::{RupassArgs, generate_password_flow, generate_password_flow_with_evaluator};
 use std::collections::VecDeque;
 
 // Mock evaluator for deterministic scenarios
@@ -23,6 +23,10 @@ impl MockEvaluator {
             seq,
             idx: AtomicUsize::new(0),
         }
+    }
+
+    fn call_count(&self) -> usize {
+        self.idx.load(Ordering::Relaxed)
     }
 }
 
@@ -217,4 +221,36 @@ async fn show_strength_adds_line() {
     let out = ui.outputs_joined();
     assert!(out.contains("Password Generation Result"));
     assert!(out.contains("Strength:"));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn evaluator_injection_is_used_in_flow() {
+    let args = RupassArgs {
+        language: None,
+        password_length: Some(15),
+        all: true,
+        no_prompt: true,
+        numbers: false,
+        no_numbers: false,
+        uppercase: false,
+        no_uppercase: false,
+        lowercase: false,
+        no_lowercase: false,
+        symbols: false,
+        no_symbols: false,
+        symbols_set: None,
+        timeout_ms: 10,
+        min_score: 4,
+        strict: false,
+        show_strength: false,
+        quiet: true,
+    };
+
+    let evaluator = MockEvaluator::new(vec![(4, 80.0)]);
+    let mut ui = MockUI::default();
+    let res =
+        generate_password_flow_with_evaluator(&mut ui, &mock_bundle(), &args, &evaluator).await;
+
+    assert!(res.is_ok());
+    assert!(evaluator.call_count() > 0);
 }

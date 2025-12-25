@@ -22,6 +22,7 @@ use zxcvbn::{Score, zxcvbn};
 
 const MAX_GENERATION_ATTEMPTS: usize = 500000;
 const STRENGTH_CHECK_INTERVAL: usize = 10;
+pub const MAX_TIMEOUT_MS: u64 = 3_600_000;
 
 /// N回に1回だけ`Instant::now()`を評価するための間引き係数
 const NOW_CHECK_INTERVAL: u64 = 32;
@@ -51,27 +52,42 @@ impl PasswordStrengthEvaluator for ZxcvbnEvaluator {
     }
 }
 
-/// # Overview
-/// 指定の時間予算内で、zxcvbnスコア/エントロピーに基づいてパスワードを探索します。
-/// `min_score` 到達で早期終了します。
-pub async fn produce_password_within_time(
+fn assemble_random_password_sync(
+    all_vec: &[char],
+    len: usize,
+    req: &[Vec<char>],
+) -> Option<String> {
+    if all_vec.is_empty() {
+        return None;
+    }
+
+    let global_rng = get_global_rng().ok()?;
+    let mut sampler = StreamingIndexSampler::new(global_rng.stream());
+    assemble_random_password_internal(&mut sampler, all_vec, len, req, None)
+}
+
+pub(crate) fn produce_password_within_time_sync(
     all_vec: &[char],
     req: &[Vec<char>],
     len: usize,
     timeout_ms: u64,
     min_score: u8,
     strict: bool,
+    evaluator: &dyn PasswordStrengthEvaluator,
 ) -> Result<GenerationOutcome> {
     validate_password_length(len)?;
+    if timeout_ms > MAX_TIMEOUT_MS {
+        return Err(GenerationError::InvalidTimeout);
+    }
     if all_vec.is_empty() {
         return Err(GenerationError::GenerationFailed);
     }
     if req.len() > len {
         return Err(GenerationError::InvalidLength);
     }
-
-    let evaluator = ZxcvbnEvaluator;
-    let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+    let deadline = Instant::now()
+        .checked_add(Duration::from_millis(timeout_ms))
+        .ok_or(GenerationError::InvalidTimeout)?;
     let mut attempts: u64 = 0;
     let mut best_pwd: Option<Zeroizing<String>> = None;
     let mut best_score: u8 = 0;
@@ -80,7 +96,7 @@ pub async fn produce_password_within_time(
     loop {
         attempts += 1;
 
-        if let Some(mut candidate) = assemble_random_password(all_vec, len, req).await {
+        if let Some(mut candidate) = assemble_random_password_sync(all_vec, len, req) {
             if candidate.len() != len {
                 candidate.zeroize();
                 continue;
@@ -143,6 +159,22 @@ pub async fn produce_password_within_time(
 }
 
 /// # Overview
+/// 指定の時間予算内で、zxcvbnスコア/エントロピーに基づいてパスワードを探索します。
+/// `min_score` 到達で早期終了します。
+#[allow(clippy::unused_async)]
+pub async fn produce_password_within_time(
+    all_vec: &[char],
+    req: &[Vec<char>],
+    len: usize,
+    timeout_ms: u64,
+    min_score: u8,
+    strict: bool,
+    evaluator: &dyn PasswordStrengthEvaluator,
+) -> Result<GenerationOutcome> {
+    produce_password_within_time_sync(all_vec, req, len, timeout_ms, min_score, strict, evaluator)
+}
+
+/// # Overview
 /// 指定された文字セットと長さに基づいて、安全なパスワードを生成します。
 ///
 /// # Arguments
@@ -155,6 +187,7 @@ pub async fn produce_password_within_time(
 #[doc(alias = "generate")]
 #[doc(alias = "password")]
 #[doc(alias = "secure")]
+#[allow(clippy::unused_async)]
 pub async fn produce_secure_password(
     all_vec: &[char],
     len: usize,
@@ -173,7 +206,7 @@ pub async fn produce_secure_password(
     let mut candidates = Vec::with_capacity(STRENGTH_CHECK_INTERVAL);
 
     for attempt in 1..=MAX_GENERATION_ATTEMPTS {
-        if let Some(pwd) = assemble_random_password(all_vec, len, req).await {
+        if let Some(pwd) = assemble_random_password_sync(all_vec, len, req) {
             candidates.push(pwd);
 
             // 定期的にバッチで強度チェック - CPU効率改善
@@ -185,26 +218,18 @@ pub async fn produce_secure_password(
                 }
             }
         }
-
-        // 進捗報告（大量の試行時の可視性向上）
-        if attempt % 10_000 == 0 {}
     }
 
     Err(GenerationError::GenerationFailed)
 }
 
+#[allow(clippy::unused_async)]
 pub async fn assemble_random_password(
     all_vec: &[char],
     len: usize,
     req: &[Vec<char>],
 ) -> Option<String> {
-    if all_vec.is_empty() {
-        return None;
-    }
-
-    let global_rng = get_global_rng().ok()?;
-    let mut sampler = StreamingIndexSampler::new(global_rng.stream());
-    assemble_random_password_internal(&mut sampler, all_vec, len, req, None)
+    assemble_random_password_sync(all_vec, len, req)
 }
 
 fn assemble_random_password_internal<S: ByteStream>(

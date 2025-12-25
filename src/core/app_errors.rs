@@ -22,6 +22,9 @@ pub enum GenerationError {
     /// パスワード長が不正な場合に発生します。
     #[error("Invalid password length")]
     InvalidLength,
+    /// タイムアウト値が不正な場合に発生します。
+    #[error("Invalid timeout value")]
+    InvalidTimeout,
     /// パスワード生成が指定された試行回数内に完了しなかった場合に発生します。
     #[error("Password generation failed")]
     GenerationFailed,
@@ -52,6 +55,15 @@ pub enum GenerationError {
     /// OSからのエントロピー取得に失敗した場合に発生します。
     #[error("Failed to gather entropy from the operating system.")]
     EntropyError(#[from] getrandom::Error),
+}
+
+/// # Overview
+/// CLI の終了コードをエラー種別から決定します。
+pub fn exit_code_for_error(err: &GenerationError) -> i32 {
+    match err {
+        GenerationError::StrictTargetUnmet => 3,
+        _ => 1,
+    }
 }
 
 /// # Overview

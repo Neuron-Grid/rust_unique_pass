@@ -281,12 +281,7 @@ impl SecureString {
     /// より厳密なエラーハンドリングが必要な場合は`try_as_str()`を使用してください。
     pub fn as_str(&self) -> &str {
         let slice = &self.data.as_slice()[..self.len];
-        std::str::from_utf8(slice).unwrap_or_else(|_| {
-            // パニックを避けるため、空文字列を返す
-            // エラーログを出力して問題を記録
-            eprintln!("Warning: SecureString contains invalid UTF-8 data");
-            ""
-        })
+        std::str::from_utf8(slice).unwrap_or("")
     }
 
     /// 文字列として安全に参照

@@ -17,7 +17,7 @@ error_generation = "Fehler bei der Generierung des Passworts."
 error_no_charset_selected  = "Fehler: Kein Zeichensatz ausgewählt.
  Bitte geben Sie mindestens einen der Schalter an: --numbers (-n), --uppercase (-u), --lowercase (-w), --symbols (-s) oder --all.
  Im nicht-interaktiven Modus (--no-prompt) sind diese Schalter verpflichtend."
-question_enter_special_chars = "Geben Sie die Sonderzeichen ein, die Sie verwenden möchten. (z. B. = ! @#|¥)"
+question_enter_special_chars = "Geben Sie die Sonderzeichen ein, die Sie verwenden möchten. (z. B. = ! @#|$)"
 question_password_length = "Geben Sie die Länge Ihres Passworts ein.
  Es wird ein Minimum von 15 Zeichen empfohlen."
 question_change_special_chars = "Möchten Sie die verwendeten Sonderzeichen ändern?"

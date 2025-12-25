@@ -13,7 +13,7 @@ Basically, the focus is on fixing bugs and enhancing stability.
 
 ## Additional languages supported
 The project aims to be multilingual and welcomes the addition of new languages. If you would like to add a new language to the project, please follow the process below.
-1. **Submit a language proposal**: propose the addition of a new language via an issue on GitLab.
-2. **Start the translation process**: once your proposal has been approved, start the translation. Submit the translation files (ftl files) via a GitLab merge request.
+1. **Submit a language proposal**: propose the addition of a new language via an issue on GitLab (the primary repository; GitHub is a mirror).
+2. **Start the translation process**: once your proposal has been approved, start the translation. Submit the translation files (ftl files) via a GitLab merge request (GitHub is a mirror).
 3. **Review and feedback**: As there are currently no reviewers, translation reviews will be done by me, the project manager. I may use DeepL Translate or other translation tools as an aid to check the accuracy of the translation.
 4. **Merge**: If there are no problems after review, the translation will be merged into the main branch and released in the next release.

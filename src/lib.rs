@@ -21,6 +21,8 @@ pub mod password;
 pub use cli::{RupassArgs, parse_args};
 /// 標準入出力によるユーザーインターフェースを提供します。
 pub use cli::{StdioInterface, UserInterface};
+/// CLI の終了コードマッピングを提供します。
+pub use core::exit_code_for_error;
 /// アプリケーション固有のエラー型とResultエイリアスを提供します。
 pub use core::{GenerationError, Result};
 /// 様々なユーティリティ関数を提供します。
@@ -29,5 +31,7 @@ pub use core::{ask_user_yes_no, fallback_translation, parse_yes_no_input, prompt
 pub use core::{get_translation, initialize_bundle};
 /// パスワード生成の主要なフローを処理します。
 pub use password::generate_password_flow;
+/// 評価器を差し替えてパスワード生成フローを処理します。
+pub use password::generate_password_flow_with_evaluator;
 /// パスワード長のバリデーション機能を提供します。
 pub use password::validate_password_length;

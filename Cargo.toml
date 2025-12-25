@@ -28,9 +28,7 @@ zeroize = "1.8.2"
 zeroize_derive = { version = "1.4.2", optional = true }
 getrandom = "0.3.4"
 subtle = "2.6.1"
-sha2 = "0.10.9"
 num_cpus = "1.17.0"
-hkdf = "0.12.4"
 libc = "0.2.178"
 windows-sys = "0.61.2"
 

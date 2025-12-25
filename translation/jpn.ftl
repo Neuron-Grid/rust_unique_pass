@@ -18,7 +18,7 @@ error_generation = "パスワードの生成時にエラーが発生しました
 error_no_charset_selected = "エラー: 文字セットが選択されていません。
  --numbers(-n), --uppercase(-u), --lowercase(-w), --symbols(-s)、または --all を指定してください。
  非対話モード(--no-prompt)ではこれらのフラグ指定が必須です。"
-question_enter_special_chars = "使用する特殊文字を入力してください (例 = !@#|¥)"
+question_enter_special_chars = "使用する特殊文字を入力してください (例 = !@#|$)"
 question_password_length = "パスワードの長さを入力してください。
  15文字以上を推奨します。"
 question_change_special_chars = "使用する特殊文字を変更しますか？"

@@ -14,50 +14,23 @@ limitations under the License. */
 
 /// - 乱数生成は常にOSの安全なエントロピーソースを利用
 /// - エントロピー不足時はエラーを返し、予測可能性を排除
-/// - メモリ上のシード値はZeroizingで自動消去
+/// - 一時バッファはZeroizingで自動消去
 use crate::core::app_errors::Result as AppResult;
 use getrandom;
-use hkdf::Hkdf;
-use rand::{CryptoRng, RngCore, SeedableRng};
-/// CSPRNGモジュール
-/// 本モジュールはNIST SP 800-90Aに準拠した暗号学的擬似乱数生成器(CSPRNG)を提供します。
-/// - OSエントロピーソースの利用
-/// - 自動再シード機能
-/// - 基本的なランタイム検証
-/// - スレッドセーフ設計
-/// ## セキュリティ設計方針
-use rand_chacha::ChaCha20Rng;
-use sha2::Sha256;
-use std::sync::Mutex;
+use rand::{CryptoRng, RngCore};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use zeroize::Zeroizing;
 
-/// HKDFの`info`パラメータに使用する定数
-/// NIST SP 800-56C 推奨の「ドメイン分離」を実現し、
-/// 他アプリケーションで同一シードが使われても乱数列が衝突しないようにする。
-const HKDF_INFO: &[u8] = b"rust_unique_pass-v1-seed";
-
-/// HMAC-SHA256ベースのHKDFによるseed拡張
-/// `info`にアプリケーション固有文字列[`HKDF_INFO`]を渡し、ドメイン分離を強化する。
-/// 失敗時にはErrorを返し、適切なエラーハンドリングを可能にする。
-fn hkdf_expand(seed: &[u8; 32]) -> AppResult<Zeroizing<[u8; 32]>> {
-    // NIST SP 800-56C に準拠した HKDF（HMAC-SHA256）
-    let hk = Hkdf::<Sha256>::new(None, seed);
-    let mut okm = Zeroizing::new([0u8; 32]);
-    hk.expand(HKDF_INFO, okm.as_mut()).map_err(|_| {
-        crate::core::app_errors::GenerationError::IoError(std::io::Error::other(
-            "HKDF expand failed",
-        ))
-    })?;
-    Ok(okm)
-}
-
-/// NIST SP 800-90A準拠のCSPRNG実装（改善版）
-/// 暗号学的に安全な擬似乱数生成器。
-/// 自動再シード機能と基本的なランタイム検証を含む。
+/// CSPRNGモジュール
+/// 本モジュールはOSの暗号学的乱数生成器から毎バイト取得するラッパーを提供します。
+/// - OSエントロピーソースの利用（生成ごとに直接取得）
+/// - 自動再シード判定（統計カウンタのリセット）
+/// - 基本的なランタイム検証
+/// - スレッドセーフ設計
+/// ## セキュリティ設計方針
+/// - 生成失敗時はエラーで通知し、再試行判断を呼び出し側に委ねる。
 pub struct SecureRng {
-    rng: Mutex<ChaCha20Rng>,
     // 出力監視機能
     output_counter: AtomicU64,
     request_counter: AtomicU64,
@@ -76,16 +49,13 @@ impl SecureRng {
     /// 新しいSecureRngインスタンスを作成
     /// # セキュリティ
     /// - OSのエントロピーソースを利用
-    /// - シード値はZeroizingで自動消去
-    /// - 自動再シード機能付き
+    /// - 一時バッファはZeroizingで自動消去
+    /// - 自動再シード判定付き
     pub fn new() -> AppResult<Self> {
-        let mut seed = Zeroizing::new([0u8; 32]);
-        getrandom::fill(seed.as_mut())?;
-        let hkdf_seed = hkdf_expand(&seed)?;
-        let rng = ChaCha20Rng::from_seed(*hkdf_seed);
+        let mut probe = Zeroizing::new([0u8; 32]);
+        getrandom::fill(probe.as_mut())?;
 
         Ok(Self {
-            rng: Mutex::new(rng),
             output_counter: AtomicU64::new(0),
             request_counter: AtomicU64::new(0),
             last_reseed_time: AtomicU64::new(
@@ -100,23 +70,16 @@ impl SecureRng {
         })
     }
 
-    // タイミングエントロピー収集機能は削除（NIST SP 800-90A/RFC 4086非推奨のため）
-
     /// 指定されたバッファに乱数バイトを生成
-    /// 自動再シード機能と基本的な品質チェック付き
+    /// OSエントロピーを直接使用し、基本的な品質チェック付き
     pub fn generate_bytes(&self, dest: &mut [u8]) -> AppResult<()> {
         // 自動再シード判定
         if self.should_auto_reseed()? {
             self.reseed()?;
         }
 
-        // 乱数生成
-        let mut rng = self.rng.lock().map_err(|e| {
-            crate::core::app_errors::GenerationError::IoError(std::io::Error::other(format!(
-                "RNG mutex poisoned: {e}"
-            )))
-        })?;
-        rng.fill_bytes(dest);
+        // 乱数生成（OS RNG直読み）
+        getrandom::fill(dest)?;
 
         // 基本的な品質チェック（全ゼロでないことを確認）
         if !dest.is_empty() && dest.iter().all(|&b| b == 0) {
@@ -147,24 +110,17 @@ impl SecureRng {
             .as_secs();
         let last_reseed = self.last_reseed_time.load(Ordering::Relaxed);
 
+        let elapsed = current_time.saturating_sub(last_reseed);
         Ok(output_bytes >= self.reseed_threshold_bytes
             || requests >= self.reseed_threshold_requests
-            || (current_time - last_reseed) >= self.reseed_threshold_time)
+            || elapsed >= self.reseed_threshold_time)
     }
 
     /// 再シード
     /// 手動呼び出しまたは自動実行
     pub fn reseed(&self) -> AppResult<()> {
-        let mut seed = Zeroizing::new([0u8; 32]);
-        getrandom::fill(seed.as_mut())?;
-        let hkdf_seed = hkdf_expand(&seed)?;
-
-        let mut rng = self.rng.lock().map_err(|e| {
-            crate::core::app_errors::GenerationError::IoError(std::io::Error::other(format!(
-                "RNG mutex poisoned: {e}"
-            )))
-        })?;
-        *rng = ChaCha20Rng::from_seed(*hkdf_seed);
+        let mut probe = Zeroizing::new([0u8; 32]);
+        getrandom::fill(probe.as_mut())?;
 
         // カウンタリセット
         self.output_counter.store(0, Ordering::Relaxed);
@@ -204,18 +160,18 @@ impl RngCore for SecureRng {
     }
 
     /// RNG 生成バイトの低レベル API
-    /// 内部で[`generate_bytes`]を呼び出し、失敗時は
-    /// エラー内容を標準エラー出力に記録し
-    /// `dest`全体を安全なゼロ埋めで初期化する。
-    /// パニックによるクラッシュを避けつつ、危険な乱数列が
-    /// 流出しない “セーフデフォルト” 動作を提供する。
+    /// 内部で[`generate_bytes`]を呼び出し、失敗時は即座にパニックして
+    /// 予測可能な乱数列の流出を防ぐ。
     /// ライブラリ利用者向け注意
-    /// この関数は失敗を返さないため、呼び出し後に戻り値が高品質ランダムであることを保証したい場合は
-    /// 事前に[`generate_bytes`]を直接呼び出して結果を確認すること。
+    /// 失敗時の制御を行いたい場合は [`generate_bytes`] を直接呼び出し
+    /// `Result` を処理すること。
     fn fill_bytes(&mut self, dest: &mut [u8]) {
-        self.generate_bytes(dest).unwrap_or_else(|e| {
-            panic!("Critical RNG failure: {e}");
-        });
+        if let Err(e) = self.generate_bytes(dest) {
+            if self.reseed().is_ok() && self.generate_bytes(dest).is_ok() {
+                return;
+            }
+            panic!("Secure RNG failure: {e}");
+        }
     }
 }
 impl CryptoRng for SecureRng {}
