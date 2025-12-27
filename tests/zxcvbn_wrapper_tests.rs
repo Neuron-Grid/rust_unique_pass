@@ -1,4 +1,4 @@
-use rust_unique_pass::crypto::zxcvbn_wrapper::{MAX_PASSWORD_LENGTH, zxcvbn_entropy_score};
+use rust_unique_pass::crypto::zxcvbn_wrapper::{MAX_PASSWORD_CHARS, zxcvbn_entropy_score};
 
 #[test]
 fn empty_password() {
@@ -9,11 +9,20 @@ fn empty_password() {
 
 #[test]
 fn too_long_password() {
-    let long = "a".repeat(MAX_PASSWORD_LENGTH + 1);
+    let long = "a".repeat(MAX_PASSWORD_CHARS + 1);
     let res = zxcvbn_entropy_score(&long);
     assert!(res.is_err());
     let err_msg = res.unwrap_err();
-    assert!(err_msg.contains("password length"));
+    assert!(err_msg.contains("character length"));
+}
+
+#[test]
+fn too_long_password_bytes() {
+    let long = "\u{1F980}".repeat(MAX_PASSWORD_CHARS);
+    let res = zxcvbn_entropy_score(&long);
+    assert!(res.is_err());
+    let err_msg = res.unwrap_err();
+    assert!(err_msg.contains("byte length"));
 }
 
 #[test]

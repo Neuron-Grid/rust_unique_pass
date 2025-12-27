@@ -134,14 +134,18 @@ impl TimingSafeOps {
         }
 
         // 2の累乗に切り上げ
-        let mask = max.next_power_of_two() - 1;
+        let mask = match max.checked_next_power_of_two() {
+            Some(power) => power - 1,
+            None => usize::MAX,
+        };
 
         // ハイブリッド方式: 固定回数での候補探索（定時間に近づける）
         let mut selected = 0usize;
         let mut selected_flag = 0u8;
 
+        const USIZE_BYTES: usize = std::mem::size_of::<usize>();
         for _ in 0..Self::HYBRID_ATTEMPTS {
-            let mut bytes = [0u8; 8];
+            let mut bytes = [0u8; USIZE_BYTES];
             rng.fill_bytes(&mut bytes);
             let random_value = usize::from_le_bytes(bytes);
             let candidate = random_value & mask;
@@ -159,7 +163,7 @@ impl TimingSafeOps {
 
         // フォールバック: バイアス排除を優先
         loop {
-            let mut bytes = [0u8; 8];
+            let mut bytes = [0u8; USIZE_BYTES];
             rng.fill_bytes(&mut bytes);
             let random_value = usize::from_le_bytes(bytes);
             let candidate = random_value & mask;

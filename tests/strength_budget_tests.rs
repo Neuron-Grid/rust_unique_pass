@@ -105,7 +105,7 @@ fn produce_with(
             let idx = (*byte as usize) % all.len();
             pwd.push(all[idx]);
         }
-        if pwd.len() < 8 {
+        if pwd.chars().count() < 8 {
             continue;
         }
         if pwd.chars().all(|c| c == pwd.chars().next().unwrap()) {

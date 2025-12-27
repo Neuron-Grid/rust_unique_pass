@@ -26,9 +26,8 @@ fn test_constant_time_compare() {
 #[test]
 fn test_secure_random_index() {
     // rand::rng()がプロジェクト内で定義されている場合は適切にuseする必要あり
-    use rust_unique_pass::crypto::rng::SecureRng;
-    let rng = SecureRng::new().expect("Failed to create SecureRng");
-    let mut rng = rng;
+    use rust_unique_pass::crypto::rng::SecureRngAdapter;
+    let mut rng = SecureRngAdapter::new().expect("Failed to create SecureRngAdapter");
 
     // 複数回実行して範囲内であることを確認
     for _ in 0..100 {
@@ -52,9 +51,8 @@ fn test_secure_random_index() {
 fn test_secure_shuffle() {
     let mut items = vec![1, 2, 3, 4, 5];
     let original = items.clone();
-    use rust_unique_pass::crypto::rng::SecureRng;
-    let rng = SecureRng::new().expect("Failed to create SecureRng");
-    let mut rng = rng;
+    use rust_unique_pass::crypto::rng::SecureRngAdapter;
+    let mut rng = SecureRngAdapter::new().expect("Failed to create SecureRngAdapter");
 
     TimingSafeOps::secure_shuffle(&mut items, &mut rng);
 

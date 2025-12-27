@@ -129,10 +129,23 @@ impl MemoryProtector {
     }
 }
 
+/// メモリ保護の状態を呼び出し元に通知するためのレポート。
+#[derive(Debug, Clone)]
+pub struct MemoryProtectionStatus {
+    additional_protection_error: Option<String>,
+}
+
+impl MemoryProtectionStatus {
+    pub fn additional_protection_error(&self) -> Option<&str> {
+        self.additional_protection_error.as_deref()
+    }
+}
+
 /// セキュアメモリアロケータ
 /// ゼロ化とプラットフォーム保護を自動的に行うセキュアなメモリ管理を提供します。
 pub struct SecureMemory {
     data: Vec<u8>,
+    protection: MemoryProtectionStatus,
 }
 
 /// `SecureMemory` 構築中に生メモリを管理するためのガード。
@@ -197,13 +210,17 @@ impl SecureMemory {
             )));
         }
 
-        if let Err(e) = MemoryProtector::additional_protection(raw.as_mut_slice()) {
-            eprintln!("Warning: Additional memory protection failed: {e}");
-        }
+        let additional_protection_error =
+            MemoryProtector::additional_protection(raw.as_mut_slice()).err();
 
         let data = raw.into_vec();
 
-        Ok(Self { data })
+        Ok(Self {
+            data,
+            protection: MemoryProtectionStatus {
+                additional_protection_error,
+            },
+        })
     }
 
     /// スライスとしてアクセス
@@ -230,15 +247,24 @@ impl SecureMemory {
     pub fn capacity(&self) -> usize {
         self.data.len()
     }
+
+    /// 追加保護の状態を取得
+    pub fn protection_status(&self) -> &MemoryProtectionStatus {
+        &self.protection
+    }
+
+    /// 明示的にメモリロック解除を試みる
+    pub fn try_unlock(&mut self) -> CryptoResult<()> {
+        MemoryProtector::unlock_memory(&mut self.data)
+            .map_err(|e| CryptoError::MemoryError(format!("Memory unlock failed: {e}")))
+    }
 }
 
 impl Drop for SecureMemory {
     fn drop(&mut self) {
         self.data.zeroize();
 
-        if let Err(e) = MemoryProtector::unlock_memory(&mut self.data) {
-            eprintln!("Warning: Memory unlock failed: {e}");
-        }
+        let _ = MemoryProtector::unlock_memory(&mut self.data);
     }
 }
 

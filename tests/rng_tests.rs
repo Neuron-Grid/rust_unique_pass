@@ -14,9 +14,6 @@ async fn test_generate_bytes() {
 
     let result = rng.generate_bytes(&mut buffer);
     assert!(result.is_ok());
-
-    // 全てゼロでないことを確認
-    assert!(buffer.iter().any(|&b| b != 0));
 }
 
 #[tokio::test]
@@ -34,7 +31,4 @@ async fn test_global_rng_basic() {
     let mut buffer = [0u8; 32];
     let result = global_rng.unwrap().generate_bytes(&mut buffer);
     assert!(result.is_ok());
-
-    // 全てゼロでないことを確認
-    assert!(buffer.iter().any(|&b| b != 0));
 }

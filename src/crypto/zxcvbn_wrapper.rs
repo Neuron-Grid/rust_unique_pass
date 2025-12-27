@@ -1,6 +1,7 @@
 use zxcvbn::zxcvbn;
 
-pub const MAX_PASSWORD_LENGTH: usize = 1024;
+pub const MAX_PASSWORD_CHARS: usize = 1024;
+pub const MAX_PASSWORD_BYTES: usize = 3072;
 
 /// zxcvbnによるパスワード強度推定（推奨）
 /// # 引数
@@ -15,11 +16,18 @@ pub fn zxcvbn_entropy_score(password: &str) -> Result<(f64, u8), String> {
     if password.is_empty() {
         return Err("password cannot be empty".to_string());
     }
-    if password.len() > MAX_PASSWORD_LENGTH {
+    let char_len = password.chars().count();
+    if char_len > MAX_PASSWORD_CHARS {
         return Err(format!(
-            "password length {} exceeds maximum allowed {}",
-            password.len(),
-            MAX_PASSWORD_LENGTH
+            "password character length {} exceeds maximum allowed {}",
+            char_len, MAX_PASSWORD_CHARS
+        ));
+    }
+    let byte_len = password.len();
+    if byte_len > MAX_PASSWORD_BYTES {
+        return Err(format!(
+            "password byte length {} exceeds maximum allowed {}",
+            byte_len, MAX_PASSWORD_BYTES
         ));
     }
 

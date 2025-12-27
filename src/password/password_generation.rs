@@ -15,7 +15,7 @@ limitations under the License. */
 use crate::core::app_errors::{GenerationError, Result};
 use crate::crypto::global_rng::{ByteStream, get_global_rng};
 use crate::crypto::zxcvbn_wrapper::zxcvbn_entropy_score;
-use crate::password::password_length::validate_password_length;
+use crate::password::password_length::{validate_password_byte_length, validate_password_length};
 use std::time::{Duration, Instant};
 use zeroize::{Zeroize, Zeroizing};
 use zxcvbn::{Score, zxcvbn};
@@ -56,12 +56,12 @@ fn assemble_random_password_sync(
     all_vec: &[char],
     len: usize,
     req: &[Vec<char>],
-) -> Option<String> {
+) -> Result<Option<String>> {
     if all_vec.is_empty() {
-        return None;
+        return Ok(None);
     }
 
-    let global_rng = get_global_rng().ok()?;
+    let global_rng = get_global_rng()?;
     let mut sampler = StreamingIndexSampler::new(global_rng.stream());
     assemble_random_password_internal(&mut sampler, all_vec, len, req, None)
 }
@@ -96,43 +96,49 @@ pub(crate) fn produce_password_within_time_sync(
     loop {
         attempts += 1;
 
-        if let Some(mut candidate) = assemble_random_password_sync(all_vec, len, req) {
-            if candidate.len() != len {
+        if let Some(mut candidate) = assemble_random_password_sync(all_vec, len, req)? {
+            if candidate.chars().count() != len {
                 candidate.zeroize();
                 continue;
             }
             // 軽量フィルタ: ごく弱い候補をスキップ
-            if candidate.len() < 8 {
+            if candidate.chars().count() < 8 {
                 candidate.zeroize();
                 continue;
-            } else if candidate
+            }
+            if validate_password_byte_length(&candidate).is_err() {
+                candidate.zeroize();
+                continue;
+            }
+            if candidate
                 .chars()
                 .all(|c| c == candidate.chars().next().unwrap_or('\0'))
             {
                 // 全て同一文字
                 candidate.zeroize();
-            } else {
-                let (score, bits) = evaluator.score_entropy(&candidate);
-
-                // ベスト更新ルール: スコア優先、同点ならエントロピー優先
-                if score > best_score || (score == best_score && bits > best_bits) {
-                    best_score = score;
-                    best_bits = bits;
-                    best_pwd = Some(Zeroizing::new(candidate.clone()));
-                }
-
-                if score >= min_score {
-                    let pwd = Zeroizing::new(candidate);
-                    return Ok(GenerationOutcome {
-                        password: pwd,
-                        score,
-                        entropy_bits: bits,
-                        reached_target: true,
-                    });
-                }
-
-                candidate.zeroize();
+                continue;
             }
+
+            let (score, bits) = evaluator.score_entropy(&candidate);
+
+            // ベスト更新ルール: スコア優先、同点ならエントロピー優先
+            if score > best_score || (score == best_score && bits > best_bits) {
+                best_score = score;
+                best_bits = bits;
+                best_pwd = Some(Zeroizing::new(candidate.clone()));
+            }
+
+            if score >= min_score {
+                let pwd = Zeroizing::new(candidate);
+                return Ok(GenerationOutcome {
+                    password: pwd,
+                    score,
+                    entropy_bits: bits,
+                    reached_target: true,
+                });
+            }
+
+            candidate.zeroize();
         }
 
         // 時間チェック（間引き）
@@ -206,7 +212,7 @@ pub async fn produce_secure_password(
     let mut candidates = Vec::with_capacity(STRENGTH_CHECK_INTERVAL);
 
     for attempt in 1..=MAX_GENERATION_ATTEMPTS {
-        if let Some(pwd) = assemble_random_password_sync(all_vec, len, req) {
+        if let Some(pwd) = assemble_random_password_sync(all_vec, len, req)? {
             candidates.push(pwd);
 
             // 定期的にバッチで強度チェック - CPU効率改善
@@ -228,7 +234,7 @@ pub async fn assemble_random_password(
     all_vec: &[char],
     len: usize,
     req: &[Vec<char>],
-) -> Option<String> {
+) -> Result<Option<String>> {
     assemble_random_password_sync(all_vec, len, req)
 }
 
@@ -238,9 +244,9 @@ fn assemble_random_password_internal<S: ByteStream>(
     len: usize,
     req: &[Vec<char>],
     mut swap_counter: Option<&mut usize>,
-) -> Option<String> {
+) -> Result<Option<String>> {
     if all_vec.is_empty() {
-        return None;
+        return Ok(None);
     }
 
     let mut need: Vec<char> = Vec::with_capacity(req.len());
@@ -249,20 +255,29 @@ fn assemble_random_password_internal<S: ByteStream>(
             continue;
         }
         let index = sampler.next_index(set.len())?;
-        let ch = set.get(index).copied()?;
+        let ch = match set.get(index).copied() {
+            Some(ch) => ch,
+            None => return Ok(None),
+        };
         need.push(ch);
     }
 
     if need.len() > len {
-        return None;
+        return Ok(None);
     }
 
-    let rest = len.checked_sub(need.len())?;
+    let rest = match len.checked_sub(need.len()) {
+        Some(rest) => rest,
+        None => return Ok(None),
+    };
     let mut pwd: Vec<char> = need;
 
     for _ in 0..rest {
         let index = sampler.next_index(all_vec.len())?;
-        let ch = all_vec.get(index).copied()?;
+        let ch = match all_vec.get(index).copied() {
+            Some(ch) => ch,
+            None => return Ok(None),
+        };
         pwd.push(ch);
     }
 
@@ -274,7 +289,7 @@ fn assemble_random_password_internal<S: ByteStream>(
         }
     }
 
-    Some(pwd.iter().collect())
+    Ok(Some(pwd.iter().collect()))
 }
 
 struct StreamingIndexSampler<S: ByteStream> {
@@ -286,32 +301,35 @@ impl<S: ByteStream> StreamingIndexSampler<S> {
         Self { stream }
     }
 
-    fn next_index(&mut self, max: usize) -> Option<usize> {
+    fn next_index(&mut self, max: usize) -> Result<usize> {
         if max == 0 {
-            return None;
+            return Err(GenerationError::GenerationFailed);
         }
 
-        let mask = max.next_power_of_two().saturating_sub(1) as u64;
+        let mask = match max.checked_next_power_of_two() {
+            Some(power) => power.saturating_sub(1) as u64,
+            None => u64::MAX,
+        };
 
         loop {
             let value = self.fetch_u64()?;
             let candidate = (value & mask) as usize;
             if candidate < max {
-                return Some(candidate);
+                return Ok(candidate);
             }
         }
     }
 
-    fn fetch_u64(&mut self) -> Option<u64> {
+    fn fetch_u64(&mut self) -> Result<u64> {
         const WORD: usize = std::mem::size_of::<u64>();
         let mut word = [0u8; WORD];
         let mut filled = 0;
 
         while filled < WORD {
             if self.stream.remaining_bytes().is_empty() {
-                self.stream.fill_next_block().ok()?;
+                self.stream.fill_next_block()?;
                 if self.stream.remaining_bytes().is_empty() {
-                    return None;
+                    return Err(GenerationError::GenerationFailed);
                 }
             }
 
@@ -322,7 +340,7 @@ impl<S: ByteStream> StreamingIndexSampler<S> {
             filled += take;
         }
 
-        Some(u64::from_le_bytes(word))
+        Ok(u64::from_le_bytes(word))
     }
 
     #[cfg(test)]
@@ -342,7 +360,10 @@ impl<S: ByteStream> StreamingIndexSampler<S> {
 /// パスワードが十分に強力であると評価された場合 `true`、そうでない場合 `false` を返します。
 fn is_strong(pwd: &str) -> bool {
     // 基本的な品質チェックを追加
-    if pwd.len() < 8 {
+    if pwd.chars().count() < 8 {
+        return false;
+    }
+    if validate_password_byte_length(pwd).is_err() {
         return false;
     }
 
@@ -433,9 +454,9 @@ pub mod test_helpers {
         all_vec: &[char],
         len: usize,
         req: &[Vec<char>],
-    ) -> Option<DeterministicOutcome> {
+    ) -> Result<Option<DeterministicOutcome>> {
         if all_vec.is_empty() {
-            return None;
+            return Ok(None);
         }
 
         let stream = DeterministicByteStream::new(rng);
@@ -445,11 +466,11 @@ pub mod test_helpers {
             assemble_random_password_internal(&mut sampler, all_vec, len, req, Some(&mut swaps))?;
         let stream = sampler.into_stream();
 
-        Some(DeterministicOutcome {
+        Ok(password.map(|password| DeterministicOutcome {
             password,
             swap_count: swaps,
             bytes_consumed: stream.bytes_consumed(),
-        })
+        }))
     }
 
     /// テスト用: 時間依存を避け、決定論的に評価関数/乱数で検証
@@ -461,7 +482,7 @@ pub mod test_helpers {
         evaluator: &impl PasswordStrengthEvaluator,
         rng: &mut impl RngCore,
         max_attempts: u64,
-    ) -> Option<(String, u8, f64, bool)> {
+    ) -> Result<Option<(String, u8, f64, bool)>> {
         // 時間制約は無視し、max_attempts まで探索
         let mut attempts: u64 = 0;
         let mut best_pwd: Option<String> = None;
@@ -470,12 +491,12 @@ pub mod test_helpers {
 
         while attempts < max_attempts {
             attempts += 1;
-            if let Some(outcome) = assemble_random_password_with_rng(rng, all_vec, len, req) {
+            if let Some(outcome) = assemble_random_password_with_rng(rng, all_vec, len, req)? {
                 let candidate = outcome.password;
-                if candidate.len() != len {
+                if candidate.chars().count() != len {
                     continue;
                 }
-                if candidate.len() < 8 {
+                if candidate.chars().count() < 8 {
                     continue;
                 }
                 if candidate
@@ -486,7 +507,7 @@ pub mod test_helpers {
                 }
                 let (score, bits) = evaluator.score_entropy(&candidate);
                 if score >= min_score {
-                    return Some((candidate, score, bits, true));
+                    return Ok(Some((candidate, score, bits, true)));
                 }
                 if score > best_score || (score == best_score && bits > best_bits) {
                     best_score = score;
@@ -496,7 +517,7 @@ pub mod test_helpers {
             }
         }
 
-        best_pwd.map(|pwd| (pwd, best_score, best_bits, false))
+        Ok(best_pwd.map(|pwd| (pwd, best_score, best_bits, false)))
     }
 
     #[test]
@@ -516,9 +537,10 @@ pub mod test_helpers {
         let len = 32;
 
         let outcome = assemble_random_password_with_rng(&mut rng, &all_vec, len, &req)
+            .expect("ランダムパスワード生成に失敗しました")
             .expect("ランダムパスワード生成に失敗しました");
 
-        assert_eq!(outcome.password.len(), len);
+        assert_eq!(outcome.password.chars().count(), len);
         assert_eq!(outcome.swap_count, len.saturating_sub(1));
         assert!(outcome.bytes_consumed >= outcome.swap_count * std::mem::size_of::<u64>(),);
     }

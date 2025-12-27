@@ -15,7 +15,7 @@ limitations under the License. */
 use crate::cli::RupassArgs;
 use crate::cli::UserInterface;
 use crate::core::app_errors::{GenerationError, Result};
-use crate::crypto::zxcvbn_wrapper::MAX_PASSWORD_LENGTH;
+use crate::crypto::zxcvbn_wrapper::{MAX_PASSWORD_BYTES, MAX_PASSWORD_CHARS};
 use fluent::FluentBundle;
 use fluent::FluentResource;
 use futures::FutureExt;
@@ -78,7 +78,7 @@ pub async fn get_password_length(
 
 /// # Overview
 /// 指定されたパスワード長が有効であるかを検証します。
-/// 現在は15文字未満、または[`MAX_PASSWORD_LENGTH`]（zxcvbnの制約）を超える長さを無効としています。
+/// 現在は15文字未満、または[`MAX_PASSWORD_CHARS`]（文字数上限）を超える長さを無効としています。
 ///
 /// # Arguments
 /// * `len`: 検証するパスワード長。
@@ -87,12 +87,32 @@ pub async fn get_password_length(
 /// パスワード長が有効な場合、`Ok(())` を返します。
 ///
 /// # Errors
-/// パスワード長が15文字未満、もしくは [`MAX_PASSWORD_LENGTH`] を超える場合、
+/// パスワード長が15文字未満、もしくは [`MAX_PASSWORD_CHARS`] を超える場合、
 /// [`GenerationError::InvalidLength`] を含む [`Result`] を返します。
 #[doc(alias = "validate")]
 #[doc(alias = "length validation")]
 pub fn validate_password_length(len: usize) -> Result<()> {
-    if !(15..=MAX_PASSWORD_LENGTH).contains(&len) {
+    if !(15..=MAX_PASSWORD_CHARS).contains(&len) {
+        Err(GenerationError::InvalidLength)
+    } else {
+        Ok(())
+    }
+}
+
+/// # Overview
+/// 指定されたパスワードのUTF-8バイト長が上限を超えていないかを検証します。
+///
+/// # Arguments
+/// * `pwd`: 検証するパスワード文字列。
+///
+/// # Returns
+/// バイト長が有効な場合、`Ok(())` を返します。
+///
+/// # Errors
+/// UTF-8バイト長が [`MAX_PASSWORD_BYTES`] を超える場合、
+/// [`GenerationError::InvalidLength`] を含む [`Result`] を返します。
+pub fn validate_password_byte_length(pwd: &str) -> Result<()> {
+    if pwd.len() > MAX_PASSWORD_BYTES {
         Err(GenerationError::InvalidLength)
     } else {
         Ok(())

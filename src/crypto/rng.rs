@@ -71,7 +71,7 @@ impl SecureRng {
     }
 
     /// 指定されたバッファに乱数バイトを生成
-    /// OSエントロピーを直接使用し、基本的な品質チェック付き
+    /// OSエントロピーを直接使用し、失敗時はエラーを返す
     pub fn generate_bytes(&self, dest: &mut [u8]) -> AppResult<()> {
         // 自動再シード判定
         if self.should_auto_reseed()? {
@@ -80,13 +80,6 @@ impl SecureRng {
 
         // 乱数生成（OS RNG直読み）
         getrandom::fill(dest)?;
-
-        // 基本的な品質チェック（全ゼロでないことを確認）
-        if !dest.is_empty() && dest.iter().all(|&b| b == 0) {
-            return Err(crate::core::app_errors::GenerationError::IoError(
-                std::io::Error::other("Generated all-zero bytes - potential RNG failure"),
-            ));
-        }
 
         // カウンタ更新
         self.output_counter
@@ -146,7 +139,33 @@ impl SecureRng {
     }
 }
 
-impl RngCore for SecureRng {
+/// fallible API を優先しつつ、`RngCore` が必要な場面向けのアダプタ。
+/// 失敗時はパニックするため、セキュリティ上の判断は呼び出し側に委ねる。
+pub struct SecureRngAdapter {
+    rng: SecureRng,
+}
+
+impl SecureRngAdapter {
+    pub fn new() -> AppResult<Self> {
+        Ok(Self {
+            rng: SecureRng::new()?,
+        })
+    }
+
+    pub fn from_rng(rng: SecureRng) -> Self {
+        Self { rng }
+    }
+
+    pub fn inner(&self) -> &SecureRng {
+        &self.rng
+    }
+
+    pub fn inner_mut(&mut self) -> &mut SecureRng {
+        &mut self.rng
+    }
+}
+
+impl RngCore for SecureRngAdapter {
     fn next_u32(&mut self) -> u32 {
         let mut bytes = [0u8; 4];
         self.fill_bytes(&mut bytes);
@@ -159,22 +178,16 @@ impl RngCore for SecureRng {
         u64::from_le_bytes(bytes)
     }
 
-    /// RNG 生成バイトの低レベル API
-    /// 内部で[`generate_bytes`]を呼び出し、失敗時は即座にパニックして
-    /// 予測可能な乱数列の流出を防ぐ。
-    /// ライブラリ利用者向け注意
-    /// 失敗時の制御を行いたい場合は [`generate_bytes`] を直接呼び出し
-    /// `Result` を処理すること。
     fn fill_bytes(&mut self, dest: &mut [u8]) {
-        if let Err(e) = self.generate_bytes(dest) {
-            if self.reseed().is_ok() && self.generate_bytes(dest).is_ok() {
+        if let Err(e) = self.rng.generate_bytes(dest) {
+            if self.rng.reseed().is_ok() && self.rng.generate_bytes(dest).is_ok() {
                 return;
             }
             panic!("Secure RNG failure: {e}");
         }
     }
 }
-impl CryptoRng for SecureRng {}
+impl CryptoRng for SecureRngAdapter {}
 
 #[derive(Debug, Clone)]
 pub struct RngStatistics {

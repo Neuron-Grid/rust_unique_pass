@@ -83,7 +83,7 @@ rupass -l jpn
 
 - Default language setting is English.
 - The language can be specified with the `-l` option.
-- Symbols are ASCII-only; non-ASCII symbols are not supported (no plans to support).
+- Password length is constrained by both character count and UTF-8 byte length.
 - 32-bit targets are not supported.
   - The `-l` option is not required when using the English language.
   - english use example
