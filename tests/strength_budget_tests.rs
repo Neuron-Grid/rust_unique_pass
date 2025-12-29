@@ -2,11 +2,14 @@ use async_trait::async_trait;
 use fluent::{FluentBundle, FluentResource};
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
-use rust_unique_pass::cli::UserInterface;
-use rust_unique_pass::core::app_errors::{GenerationError, Result};
-use rust_unique_pass::password::password_generation::PasswordStrengthEvaluator;
-use rust_unique_pass::{RupassArgs, generate_password_flow, generate_password_flow_with_evaluator};
+use rust_unique_pass::{
+    GenerationError, PasswordStrengthEvaluator, Result, RupassArgs, UserInterface,
+    generate_password_flow, generate_password_flow_with_evaluator,
+};
 use std::collections::VecDeque;
+
+mod common;
+use common::DeterministicByteStream;
 
 // Mock evaluator for deterministic scenarios
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -42,18 +45,13 @@ impl PasswordStrengthEvaluator for MockEvaluator {
 #[derive(Default)]
 struct MockUI {
     inputs: VecDeque<String>,
-    outputs: Vec<String>,
 }
 
 impl MockUI {
     fn new(src: Vec<&str>) -> Self {
         Self {
             inputs: src.into_iter().map(String::from).collect(),
-            outputs: Vec::new(),
         }
-    }
-    fn outputs_joined(&self) -> String {
-        self.outputs.join("")
     }
 }
 
@@ -63,7 +61,7 @@ impl UserInterface for MockUI {
         self.inputs.pop_front().ok_or(GenerationError::InvalidInput)
     }
     async fn print(&mut self, msg: &str) -> Result<()> {
-        self.outputs.push(msg.to_owned());
+        let _ = msg;
         Ok(())
     }
 }
@@ -75,6 +73,10 @@ fn mock_bundle() -> FluentBundle<FluentResource> {
     let mut bundle = FluentBundle::new(vec![]);
     bundle.add_resource(res).expect("add resource");
     bundle
+}
+
+fn test_rng(seed: u8) -> DeterministicByteStream {
+    DeterministicByteStream::from_seed([seed; 32])
 }
 
 // Minimal local helper: mimic produce_password_within_time_test logic
@@ -182,14 +184,15 @@ async fn quiet_output_is_password_only() {
     };
 
     let mut ui = MockUI::new(vec!["n", "n"]);
-    generate_password_flow(&mut ui, &mock_bundle(), &args)
+    let mut rng = test_rng(0x21);
+    let report = generate_password_flow(&mut ui, &mock_bundle(), &args, &mut rng)
         .await
         .expect("generation should succeed");
-    let out = ui.outputs_joined();
     // Only the password, no heading nor strength
-    assert!(!out.contains("Password Generation Result"));
-    assert!(!out.contains("Strength:"));
-    assert!(out.trim().lines().count() >= 1);
+    assert!(report.header.is_none());
+    assert!(report.strength_line.is_none());
+    assert!(report.warnings.is_empty());
+    assert!(!report.password.as_str().is_empty());
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -215,12 +218,18 @@ async fn show_strength_adds_line() {
         quiet: false,
     };
     let mut ui = MockUI::new(vec!["n", "n"]);
-    generate_password_flow(&mut ui, &mock_bundle(), &args)
+    let mut rng = test_rng(0x22);
+    let report = generate_password_flow(&mut ui, &mock_bundle(), &args, &mut rng)
         .await
         .expect("generation should succeed");
-    let out = ui.outputs_joined();
-    assert!(out.contains("Password Generation Result"));
-    assert!(out.contains("Strength:"));
+    assert_eq!(report.header.as_deref(), Some("Password Generation Result"));
+    assert!(
+        report
+            .strength_line
+            .as_deref()
+            .unwrap_or_default()
+            .contains("Strength:")
+    );
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -248,8 +257,15 @@ async fn evaluator_injection_is_used_in_flow() {
 
     let evaluator = MockEvaluator::new(vec![(4, 80.0)]);
     let mut ui = MockUI::default();
-    let res =
-        generate_password_flow_with_evaluator(&mut ui, &mock_bundle(), &args, &evaluator).await;
+    let mut rng = test_rng(0x23);
+    let res = generate_password_flow_with_evaluator(
+        &mut ui,
+        &mock_bundle(),
+        &args,
+        &evaluator,
+        &mut rng,
+    )
+    .await;
 
     assert!(res.is_ok());
     assert!(evaluator.call_count() > 0);

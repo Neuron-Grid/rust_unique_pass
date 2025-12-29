@@ -1,4 +1,4 @@
-use rust_unique_pass::crypto::{SecureRng, get_global_rng};
+use rust_unique_pass::{SecureRng, get_global_rng};
 use std::sync::Arc;
 
 #[tokio::test]

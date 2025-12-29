@@ -20,8 +20,9 @@ pub mod timing_safe;
 pub mod zxcvbn_wrapper;
 pub use global_rng::{GlobalRngStatistics, get_global_rng};
 pub use rng::{RngStatistics, SecureRng};
-pub use secure_memory::{SecureMemory, SecureString};
+pub use secure_memory::{MemoryProtection, SecureMemory, SecureString};
 pub use timing_safe::TimingSafeOps;
+pub use zxcvbn_wrapper::{MAX_PASSWORD_BYTES, MAX_PASSWORD_CHARS, zxcvbn_entropy_score};
 
 #[derive(Debug, thiserror::Error)]
 pub enum CryptoError {

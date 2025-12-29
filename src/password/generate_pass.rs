@@ -14,28 +14,42 @@ limitations under the License. */
 
 use crate::cli::RupassArgs;
 use crate::cli::UserInterface;
-use crate::core::app_errors::GenerationError;
 use crate::core::app_errors::Result;
 use crate::core::utils::fallback_translation;
+use crate::crypto::global_rng::ByteStream;
 use crate::password::character_set::assemble_character_set;
 use crate::password::password_generation::{
-    PasswordStrengthEvaluator, ZxcvbnEvaluator, produce_password_within_time,
-    produce_password_within_time_sync,
+    GenerationOutcome, PasswordStrengthEvaluator, ZxcvbnEvaluator, produce_password_within_time,
 };
 use crate::password::password_length::get_password_length;
 use fluent::{FluentBundle, FluentResource};
+use std::fmt;
+use zeroize::Zeroizing;
 
-// debug ビルド時のみ、テスト用に min_score を上書きする。
-// 環境変数: RUPASS_TEST_MIN_SCORE (u8)
-fn resolve_min_score(args: &RupassArgs) -> u8 {
-    let mut min_score = args.min_score;
-    if cfg!(debug_assertions)
-        && let Ok(raw) = std::env::var("RUPASS_TEST_MIN_SCORE")
-        && let Ok(value) = raw.trim().parse::<u8>()
-    {
-        min_score = value;
+/// パスワード生成結果レポート
+pub struct FlowReport {
+    pub password: Zeroizing<String>,
+    pub header: Option<String>,
+    pub strength_line: Option<String>,
+    pub warnings: Vec<String>,
+    pub reached_target: bool,
+    pub score: u8,
+    pub entropy_bits: f64,
+    pub show_blank_line: bool,
+}
+
+impl fmt::Debug for FlowReport {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FlowReport")
+            .field("header", &self.header)
+            .field("strength_line", &self.strength_line)
+            .field("warnings", &self.warnings)
+            .field("reached_target", &self.reached_target)
+            .field("score", &self.score)
+            .field("entropy_bits", &self.entropy_bits)
+            .field("show_blank_line", &self.show_blank_line)
+            .finish()
     }
-    min_score
 }
 
 #[doc(alias = "generate")]
@@ -48,25 +62,34 @@ fn resolve_min_score(args: &RupassArgs) -> u8 {
 /// * `ui`: ユーザーとの対話に使用する [`UserInterface`] トレイトオブジェクト。
 /// * `bundle`: 国際化対応に使用する [`FluentBundle`] オブジェクト。
 /// * `args`: コマンドライン引数を格納した [`RupassArgs`] 構造体。
+/// * `rng`: バイトストリームを提供する乱数ソース。
 ///
 /// # Returns
-/// パスワード生成フローが成功した場合は `Ok(())` を返します。
+/// パスワード生成フローが成功した場合は [`FlowReport`] を返します。
 ///
 /// # Errors
 /// パスワード長の取得、文字セットの組み立て、またはパスワード生成中にエラーが発生した場合、
 /// [`GenerationError`] を含む [`Result`] を返します。
 ///
 /// # Notes
-/// パスワード生成処理は計算コストが高いため、ブロッキングスレッドプール
-/// (`tokio::task::spawn_blocking`) で実行されます。
 /// 生成されたパスワードは [`Zeroizing<String>`] でラップされ、スコープを離れる際に自動的にゼロクリアされます。
+/// 出力文字列は [`FlowReport`] として返却され、表示は呼び出し元で行います。
 // パスワード生成フローのエントリポイント
 pub async fn generate_password_flow(
     ui: &mut dyn UserInterface,
     bundle: &FluentBundle<FluentResource>,
     args: &RupassArgs,
-) -> Result<()> {
-    generate_password_flow_internal(ui, bundle, args, GenerationMode::SpawnBlocking).await
+    rng: &mut impl ByteStream,
+) -> Result<FlowReport> {
+    generate_password_flow_internal(
+        ui,
+        bundle,
+        args,
+        args.min_score,
+        &ZxcvbnEvaluator,
+        rng,
+    )
+    .await
 }
 
 #[doc(alias = "generate")]
@@ -79,9 +102,10 @@ pub async fn generate_password_flow(
 /// * `bundle`: 国際化対応に使用する [`FluentBundle`] オブジェクト。
 /// * `args`: コマンドライン引数を格納した [`RupassArgs`] 構造体。
 /// * `evaluator`: パスワード強度評価に使用する評価器。
+/// * `rng`: バイトストリームを提供する乱数ソース。
 ///
 /// # Returns
-/// パスワード生成フローが成功した場合は `Ok(())` を返します。
+/// パスワード生成フローが成功した場合は [`FlowReport`] を返します。
 ///
 /// # Errors
 /// パスワード長の取得、文字セットの組み立て、またはパスワード生成中にエラーが発生した場合、
@@ -91,24 +115,39 @@ pub async fn generate_password_flow_with_evaluator(
     bundle: &FluentBundle<FluentResource>,
     args: &RupassArgs,
     evaluator: &dyn PasswordStrengthEvaluator,
-) -> Result<()> {
-    generate_password_flow_internal(ui, bundle, args, GenerationMode::Inline(evaluator)).await
+    rng: &mut impl ByteStream,
+) -> Result<FlowReport> {
+    generate_password_flow_internal(
+        ui, bundle, args, args.min_score, evaluator, rng,
+    )
+    .await
 }
 
-enum GenerationMode<'a> {
-    Inline(&'a dyn PasswordStrengthEvaluator),
-    SpawnBlocking,
+/// # Overview
+/// 最小スコアを明示的に指定してパスワード生成フローを実行します。
+///
+/// # Arguments
+/// * `min_score`: 早期終了判定に使用する目標スコア。
+/// * `rng`: バイトストリームを提供する乱数ソース。
+pub async fn generate_password_flow_with_min_score(
+    ui: &mut dyn UserInterface,
+    bundle: &FluentBundle<FluentResource>,
+    args: &RupassArgs,
+    min_score: u8,
+    rng: &mut impl ByteStream,
+) -> Result<FlowReport> {
+    generate_password_flow_internal(ui, bundle, args, min_score, &ZxcvbnEvaluator, rng).await
 }
 
 async fn generate_password_flow_internal(
     ui: &mut dyn UserInterface,
     bundle: &FluentBundle<FluentResource>,
     args: &RupassArgs,
-    mode: GenerationMode<'_>,
-) -> Result<()> {
-    // テスト用の上書きは debug ビルドのみで有効
-    let min_score = resolve_min_score(args);
-    let gen_msg = fallback_translation(bundle, "generated_password", "Generated password:", None);
+    min_score: u8,
+    evaluator: &dyn PasswordStrengthEvaluator,
+    rng: &mut impl ByteStream,
+) -> Result<FlowReport> {
+    let mut warnings: Vec<String> = Vec::new();
     let length = get_password_length(ui, bundle, args).await?;
     let (all_chars, req_sets) = assemble_character_set(ui, bundle, args).await?;
 
@@ -117,132 +156,88 @@ async fn generate_password_flow_internal(
 
     // min-score が 0/1 の場合は弱さを警告（stderr）。quiet時は抑制
     if (min_score == 0 || min_score == 1) && !args.quiet {
-        eprintln!(
+        warnings.push(format!(
             "Warning: very weak target score {} requested (0/1)",
             min_score
-        );
+        ));
     }
 
-    let outcome = match mode {
-        GenerationMode::Inline(eval) => {
-            produce_password_within_time(
-                &all_vec,
-                &req_vec,
-                length,
-                args.timeout_ms,
-                min_score,
-                args.strict,
-                eval,
-            )
-            .await
-        }
-        GenerationMode::SpawnBlocking => {
-            let all_vec = all_vec.clone();
-            let req_vec = req_vec.clone();
-            let timeout_ms = args.timeout_ms;
-            let strict = args.strict;
-            tokio::task::spawn_blocking(move || {
-                let evaluator = ZxcvbnEvaluator;
-                produce_password_within_time_sync(
-                    &all_vec, &req_vec, length, timeout_ms, min_score, strict, &evaluator,
-                )
-            })
-            .await
-            .map_err(|e| {
-                GenerationError::IoError(std::io::Error::other(format!(
-                    "spawn_blocking failed: {e}"
-                )))
-            })?
-        }
+    let outcome = produce_password_within_time(
+        rng,
+        &all_vec,
+        &req_vec,
+        length,
+        args.timeout_ms,
+        min_score,
+        args.strict,
+        evaluator,
+    )
+    .await;
+
+    let outcome = outcome?;
+    let GenerationOutcome {
+        password,
+        score,
+        entropy_bits,
+        reached_target,
+    } = outcome;
+
+    let header = if args.quiet {
+        None
+    } else {
+        Some(fallback_translation(
+            bundle,
+            "generated_password",
+            "Generated password:",
+            None,
+        ))
     };
 
-    match outcome {
-        Ok(res) => {
-            // 通常出力
-            if args.quiet {
-                // パスワードのみ（stdout）。警告は抑制
-                ui.print(res.password.as_str()).await?;
-            } else {
-                // 見出し + パスワードを逐次出力して複製を避ける
-                ui.print(gen_msg.as_str()).await?;
-                ui.print(res.password.as_str()).await?;
-                ui.print("").await?;
+    let strength_line = if !args.quiet && args.show_strength {
+        use fluent::FluentArgs;
+        let mut fargs = FluentArgs::new();
+        fargs.set("score", score as i64);
+        let entropy_str = format!("{:.1}", entropy_bits);
+        fargs.set("entropyBits", entropy_str.as_str());
+        Some(crate::core::utils::fallback_translation(
+            bundle,
+            "info_strength_line",
+            &format!("Strength: {}/4 (entropy: {:.1} bits)", score, entropy_bits),
+            Some(&fargs),
+        ))
+    } else {
+        None
+    };
 
-                // --show-strength 指定時のみ強度行を stdout に追加
-                if args.show_strength {
-                    use fluent::FluentArgs;
-                    let mut fargs = FluentArgs::new();
-                    fargs.set("score", res.score as i64);
-                    let entropy_str = format!("{:.1}", res.entropy_bits);
-                    fargs.set("entropyBits", entropy_str.as_str());
-                    let strength_line = crate::core::utils::fallback_translation(
-                        bundle,
-                        "info_strength_line",
-                        &format!(
-                            "Strength: {}/4 (entropy: {:.1} bits)",
-                            res.score, res.entropy_bits
-                        ),
-                        Some(&fargs),
-                    );
-                    ui.print(&strength_line).await?;
-                }
-
-                // 目標未達かつ非strictの場合のみ警告（stderr）
-                if !res.reached_target && !args.strict {
-                    use fluent::FluentArgs;
-                    let mut wargs = FluentArgs::new();
-                    wargs.set("targetScore", min_score as i64);
-                    wargs.set("budgetMs", args.timeout_ms as i64);
-                    wargs.set("bestScore", res.score as i64);
-                    let entropy_str = format!("{:.1}", res.entropy_bits);
-                    wargs.set("entropyBits", entropy_str.as_str());
-                    let warn_msg = crate::core::utils::fallback_translation(
-                        bundle,
-                        "warning_best_effort_used",
-                        &format!(
-                            "Warning: Could not reach target score {} within {} ms. Using best candidate: score {} ({} bits).",
-                            min_score, args.timeout_ms, res.score, entropy_str
-                        ),
-                        Some(&wargs),
-                    );
-                    eprintln!("{}", warn_msg);
-                }
-            }
-
-            // スコープ離脱で自動zeroize
-            drop(res);
-            Ok(())
-        }
-        Err(e) => {
-            // strict 未達等のエラー処理（stderr）
-            match e {
-                GenerationError::StrictTargetUnmet => {
-                    if !args.quiet {
-                        use fluent::FluentArgs;
-                        let mut eargs = FluentArgs::new();
-                        eargs.set("targetScore", min_score as i64);
-                        eargs.set("budgetMs", args.timeout_ms as i64);
-                        let err_msg = crate::core::utils::fallback_translation(
-                            bundle,
-                            "error_target_unmet_strict",
-                            &format!(
-                                "Error: Could not reach target score {} within {} ms.",
-                                min_score, args.timeout_ms
-                            ),
-                            Some(&eargs),
-                        );
-                        eprintln!("{}", err_msg);
-                    } else {
-                        // quietでもエラーは stderr に出す
-                        eprintln!(
-                            "Error: Could not reach target score {} within {} ms.",
-                            min_score, args.timeout_ms
-                        );
-                    }
-                    Err(GenerationError::StrictTargetUnmet)
-                }
-                other => Err(other),
-            }
-        }
+    // 目標未達かつ非strictの場合のみ警告（stderr）
+    if !reached_target && !args.strict && !args.quiet {
+        use fluent::FluentArgs;
+        let mut wargs = FluentArgs::new();
+        wargs.set("targetScore", min_score as i64);
+        wargs.set("budgetMs", args.timeout_ms as i64);
+        wargs.set("bestScore", score as i64);
+        let entropy_str = format!("{:.1}", entropy_bits);
+        wargs.set("entropyBits", entropy_str.as_str());
+        let warn_msg = crate::core::utils::fallback_translation(
+            bundle,
+            "warning_best_effort_used",
+            &format!(
+                "Warning: Could not reach target score {} within {} ms. Using best candidate: score {} ({} bits).",
+                min_score, args.timeout_ms, score, entropy_str
+            ),
+            Some(&wargs),
+        );
+        warnings.push(warn_msg);
     }
+
+    Ok(FlowReport {
+        password,
+        header,
+        strength_line,
+        warnings,
+        reached_target,
+        score,
+        entropy_bits,
+        show_blank_line: !args.quiet,
+    })
 }

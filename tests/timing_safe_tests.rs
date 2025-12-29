@@ -1,4 +1,6 @@
-use rust_unique_pass::crypto::timing_safe::*;
+use rand::SeedableRng;
+use rand_chacha::ChaCha8Rng;
+use rust_unique_pass::TimingSafeOps;
 
 #[test]
 fn test_constant_time_select() {
@@ -26,8 +28,7 @@ fn test_constant_time_compare() {
 #[test]
 fn test_secure_random_index() {
     // rand::rng()がプロジェクト内で定義されている場合は適切にuseする必要あり
-    use rust_unique_pass::crypto::rng::SecureRngAdapter;
-    let mut rng = SecureRngAdapter::new().expect("Failed to create SecureRngAdapter");
+    let mut rng = ChaCha8Rng::from_seed([0x44; 32]);
 
     // 複数回実行して範囲内であることを確認
     for _ in 0..100 {
@@ -51,8 +52,7 @@ fn test_secure_random_index() {
 fn test_secure_shuffle() {
     let mut items = vec![1, 2, 3, 4, 5];
     let original = items.clone();
-    use rust_unique_pass::crypto::rng::SecureRngAdapter;
-    let mut rng = SecureRngAdapter::new().expect("Failed to create SecureRngAdapter");
+    let mut rng = ChaCha8Rng::from_seed([0x45; 32]);
 
     TimingSafeOps::secure_shuffle(&mut items, &mut rng);
 

@@ -1,4 +1,4 @@
-use rust_unique_pass::crypto::zxcvbn_wrapper::{MAX_PASSWORD_CHARS, zxcvbn_entropy_score};
+use rust_unique_pass::{MAX_PASSWORD_CHARS, zxcvbn_entropy_score};
 
 #[test]
 fn empty_password() {

@@ -3,10 +3,11 @@ use rust_unique_pass::{
     GenerationError, Result, RupassArgs, UserInterface, generate_password_flow, initialize_bundle,
 };
 
+mod common;
+use common::DeterministicByteStream;
+
 #[derive(Default)]
-struct MockUI {
-    outputs: Vec<String>,
-}
+struct MockUI {}
 
 #[async_trait(?Send)]
 impl UserInterface for MockUI {
@@ -15,7 +16,7 @@ impl UserInterface for MockUI {
     }
 
     async fn print(&mut self, msg: &str) -> Result<()> {
-        self.outputs.push(msg.to_owned());
+        let _ = msg;
         Ok(())
     }
 }
@@ -45,7 +46,8 @@ async fn strict_unmet_returns_error_when_min_score_unreachable() {
 
     let bundle = initialize_bundle(&args).expect("bundle should initialize");
     let mut ui = MockUI::default();
-    let res = generate_password_flow(&mut ui, &bundle, &args).await;
+    let mut rng = DeterministicByteStream::from_seed([0x31; 32]);
+    let res = generate_password_flow(&mut ui, &bundle, &args, &mut rng).await;
 
     assert!(matches!(res, Err(GenerationError::StrictTargetUnmet)));
 }

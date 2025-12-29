@@ -13,22 +13,27 @@ See the License for the specific language governing permissions and
 limitations under the License. */
 
 use crate::core::app_errors::{GenerationError, Result};
-use crate::crypto::global_rng::{ByteStream, get_global_rng};
+use crate::crypto::global_rng::ByteStream;
 use crate::crypto::zxcvbn_wrapper::zxcvbn_entropy_score;
 use crate::password::password_length::{validate_password_byte_length, validate_password_length};
 use std::time::{Duration, Instant};
 use zeroize::{Zeroize, Zeroizing};
 use zxcvbn::{Score, zxcvbn};
 
+// 将来の拡張用に保持
+#[allow(dead_code)]
 const MAX_GENERATION_ATTEMPTS: usize = 500000;
+// 将来の拡張用に保持
+#[allow(dead_code)]
 const STRENGTH_CHECK_INTERVAL: usize = 10;
 pub const MAX_TIMEOUT_MS: u64 = 3_600_000;
 
 /// N回に1回だけ`Instant::now()`を評価するための間引き係数
 const NOW_CHECK_INTERVAL: u64 = 32;
+const MIN_PASSWORD_CHARS: usize = 8;
 
 /// 時間予算による生成結果
-pub struct GenerationOutcome {
+pub(crate) struct GenerationOutcome {
     pub password: Zeroizing<String>,
     pub score: u8,
     pub entropy_bits: f64,
@@ -52,7 +57,77 @@ impl PasswordStrengthEvaluator for ZxcvbnEvaluator {
     }
 }
 
-fn assemble_random_password_sync(
+/// 候補文字列の解析結果
+struct CandidateAnalysis {
+    char_len: usize,
+    byte_len: usize,
+    all_same: bool,
+}
+
+/// 候補文字列を1回走査で解析する
+fn analyze_candidate(candidate: &str) -> CandidateAnalysis {
+    let mut char_len = 0usize;
+    let mut first_char: Option<char> = None;
+    let mut all_same = true;
+
+    for ch in candidate.chars() {
+        char_len = char_len.saturating_add(1);
+        if let Some(first) = first_char {
+            if ch != first {
+                all_same = false;
+            }
+        } else {
+            first_char = Some(ch);
+        }
+    }
+
+    if char_len == 0 {
+        all_same = false;
+    }
+
+    CandidateAnalysis {
+        char_len,
+        byte_len: candidate.len(),
+        all_same,
+    }
+}
+
+/// 時刻依存を分離するためのクロック抽象化
+trait Clock {
+    fn now(&self) -> Duration;
+}
+
+/// 実運用向けの単調時間クロック
+struct SystemClock {
+    start: Instant,
+}
+
+impl SystemClock {
+    fn new() -> Self {
+        Self {
+            start: Instant::now(),
+        }
+    }
+}
+
+impl Clock for SystemClock {
+    fn now(&self) -> Duration {
+        self.start.elapsed()
+    }
+}
+
+/// 強度探索の設定
+struct StrengthSearchConfig<'a> {
+    all_vec: &'a [char],
+    req: &'a [Vec<char>],
+    len: usize,
+    timeout_ms: u64,
+    min_score: u8,
+    strict: bool,
+}
+
+fn assemble_random_password_with_sampler<S: ByteStream>(
+    sampler: &mut StreamingIndexSampler<S>,
     all_vec: &[char],
     len: usize,
     req: &[Vec<char>],
@@ -60,33 +135,28 @@ fn assemble_random_password_sync(
     if all_vec.is_empty() {
         return Ok(None);
     }
-
-    let global_rng = get_global_rng()?;
-    let mut sampler = StreamingIndexSampler::new(global_rng.stream());
-    assemble_random_password_internal(&mut sampler, all_vec, len, req, None)
+    assemble_random_password_internal(sampler, all_vec, len, req, None)
 }
 
-pub(crate) fn produce_password_within_time_sync(
-    all_vec: &[char],
-    req: &[Vec<char>],
-    len: usize,
-    timeout_ms: u64,
-    min_score: u8,
-    strict: bool,
+fn produce_password_within_time_sync_with_sampler_and_clock<S: ByteStream, C: Clock>(
+    sampler: &mut StreamingIndexSampler<S>,
+    config: &StrengthSearchConfig<'_>,
     evaluator: &dyn PasswordStrengthEvaluator,
+    clock: &C,
 ) -> Result<GenerationOutcome> {
-    validate_password_length(len)?;
-    if timeout_ms > MAX_TIMEOUT_MS {
+    validate_password_length(config.len)?;
+    if config.timeout_ms > MAX_TIMEOUT_MS {
         return Err(GenerationError::InvalidTimeout);
     }
-    if all_vec.is_empty() {
+    if config.all_vec.is_empty() {
         return Err(GenerationError::GenerationFailed);
     }
-    if req.len() > len {
+    if config.req.len() > config.len {
         return Err(GenerationError::InvalidLength);
     }
-    let deadline = Instant::now()
-        .checked_add(Duration::from_millis(timeout_ms))
+    let deadline = clock
+        .now()
+        .checked_add(Duration::from_millis(config.timeout_ms))
         .ok_or(GenerationError::InvalidTimeout)?;
     let mut attempts: u64 = 0;
     let mut best_pwd: Option<Zeroizing<String>> = None;
@@ -96,24 +166,24 @@ pub(crate) fn produce_password_within_time_sync(
     loop {
         attempts += 1;
 
-        if let Some(mut candidate) = assemble_random_password_sync(all_vec, len, req)? {
-            if candidate.chars().count() != len {
+        if let Some(mut candidate) =
+            assemble_random_password_with_sampler(sampler, config.all_vec, config.len, config.req)?
+        {
+            let analysis = analyze_candidate(&candidate);
+            if analysis.char_len != config.len {
                 candidate.zeroize();
                 continue;
             }
             // 軽量フィルタ: ごく弱い候補をスキップ
-            if candidate.chars().count() < 8 {
+            if analysis.char_len < MIN_PASSWORD_CHARS {
                 candidate.zeroize();
                 continue;
             }
-            if validate_password_byte_length(&candidate).is_err() {
+            if analysis.byte_len > crate::crypto::zxcvbn_wrapper::MAX_PASSWORD_BYTES {
                 candidate.zeroize();
                 continue;
             }
-            if candidate
-                .chars()
-                .all(|c| c == candidate.chars().next().unwrap_or('\0'))
-            {
+            if analysis.all_same {
                 // 全て同一文字
                 candidate.zeroize();
                 continue;
@@ -128,7 +198,7 @@ pub(crate) fn produce_password_within_time_sync(
                 best_pwd = Some(Zeroizing::new(candidate.clone()));
             }
 
-            if score >= min_score {
+            if score >= config.min_score {
                 let pwd = Zeroizing::new(candidate);
                 return Ok(GenerationOutcome {
                     password: pwd,
@@ -143,14 +213,14 @@ pub(crate) fn produce_password_within_time_sync(
 
         // 時間チェック（間引き）
         #[allow(clippy::manual_is_multiple_of)] // modulus-based check keeps MSRV compatibility
-        if attempts % NOW_CHECK_INTERVAL == 0 && Instant::now() >= deadline {
+        if attempts % NOW_CHECK_INTERVAL == 0 && clock.now() >= deadline {
             break;
         }
     }
 
     // 期限切れ/回数到達
     if let Some(pwd) = best_pwd {
-        if strict && best_score < min_score {
+        if config.strict && best_score < config.min_score {
             return Err(GenerationError::StrictTargetUnmet);
         }
         return Ok(GenerationOutcome {
@@ -164,11 +234,8 @@ pub(crate) fn produce_password_within_time_sync(
     Err(GenerationError::GenerationFailed)
 }
 
-/// # Overview
-/// 指定の時間予算内で、zxcvbnスコア/エントロピーに基づいてパスワードを探索します。
-/// `min_score` 到達で早期終了します。
-#[allow(clippy::unused_async)]
-pub async fn produce_password_within_time(
+pub(crate) fn produce_password_within_time_sync<S: ByteStream + ?Sized>(
+    rng: &mut S,
     all_vec: &[char],
     req: &[Vec<char>],
     len: usize,
@@ -177,13 +244,58 @@ pub async fn produce_password_within_time(
     strict: bool,
     evaluator: &dyn PasswordStrengthEvaluator,
 ) -> Result<GenerationOutcome> {
-    produce_password_within_time_sync(all_vec, req, len, timeout_ms, min_score, strict, evaluator)
+    let mut sampler = StreamingIndexSampler::new(rng);
+    let clock = SystemClock::new();
+    let config = StrengthSearchConfig {
+        all_vec,
+        req,
+        len,
+        timeout_ms,
+        min_score,
+        strict,
+    };
+    produce_password_within_time_sync_with_sampler_and_clock(
+        &mut sampler,
+        &config,
+        evaluator,
+        &clock,
+    )
+}
+
+/// # Overview
+/// 指定の時間予算内で、zxcvbnスコア/エントロピーに基づいてパスワードを探索します。
+/// `min_score` 到達で早期終了します。
+///
+/// # Arguments
+/// * `rng`: バイトストリームを提供する乱数ソース。
+#[allow(clippy::unused_async)]
+pub async fn produce_password_within_time(
+    rng: &mut impl ByteStream,
+    all_vec: &[char],
+    req: &[Vec<char>],
+    len: usize,
+    timeout_ms: u64,
+    min_score: u8,
+    strict: bool,
+    evaluator: &dyn PasswordStrengthEvaluator,
+) -> Result<GenerationOutcome> {
+    produce_password_within_time_sync(
+        rng,
+        all_vec,
+        req,
+        len,
+        timeout_ms,
+        min_score,
+        strict,
+        evaluator,
+    )
 }
 
 /// # Overview
 /// 指定された文字セットと長さに基づいて、安全なパスワードを生成します。
 ///
 /// # Arguments
+/// * `rng`: バイトストリームを提供する乱数ソース。
 /// * `all_vec`: パスワードに使用可能な全ての文字を含むスライス。
 /// * `len`: 生成するパスワードの長さ。
 /// * `req`: パスワードに最低1文字含める必要がある文字セットのリストを含むスライス。
@@ -194,7 +306,10 @@ pub async fn produce_password_within_time(
 #[doc(alias = "password")]
 #[doc(alias = "secure")]
 #[allow(clippy::unused_async)]
+// 将来の拡張用に保持
+#[allow(dead_code)]
 pub async fn produce_secure_password(
+    rng: &mut impl ByteStream,
     all_vec: &[char],
     len: usize,
     req: &[Vec<char>],
@@ -209,10 +324,11 @@ pub async fn produce_secure_password(
         return Err(GenerationError::InvalidLength);
     }
 
+    let mut sampler = StreamingIndexSampler::new(rng);
     let mut candidates: Vec<Zeroizing<String>> = Vec::with_capacity(STRENGTH_CHECK_INTERVAL);
 
     for attempt in 1..=MAX_GENERATION_ATTEMPTS {
-        if let Some(pwd) = assemble_random_password_sync(all_vec, len, req)? {
+        if let Some(pwd) = assemble_random_password_with_sampler(&mut sampler, all_vec, len, req)? {
             candidates.push(Zeroizing::new(pwd));
 
             // 定期的にバッチで強度チェック - CPU効率改善
@@ -230,12 +346,16 @@ pub async fn produce_secure_password(
 }
 
 #[allow(clippy::unused_async)]
-pub async fn assemble_random_password(
+// 将来の拡張用に保持
+#[allow(dead_code)]
+fn assemble_random_password(
+    rng: &mut impl ByteStream,
     all_vec: &[char],
     len: usize,
     req: &[Vec<char>],
 ) -> Result<Option<String>> {
-    assemble_random_password_sync(all_vec, len, req)
+    let mut sampler = StreamingIndexSampler::new(rng);
+    assemble_random_password_with_sampler(&mut sampler, all_vec, len, req)
 }
 
 fn assemble_random_password_internal<S: ByteStream>(
@@ -355,17 +475,19 @@ impl<S: ByteStream> StreamingIndexSampler<S> {
 ///
 /// # Returns
 /// パスワードが十分に強力であると評価された場合 `true`、そうでない場合 `false` を返します。
+// 将来の拡張用に保持
+#[allow(dead_code)]
 fn is_strong(pwd: &str) -> bool {
     // 基本的な品質チェックを追加
-    if pwd.chars().count() < 8 {
+    let analysis = analyze_candidate(pwd);
+    if analysis.char_len < MIN_PASSWORD_CHARS {
         return false;
     }
     if validate_password_byte_length(pwd).is_err() {
         return false;
     }
-
-    // 全て同じ文字でないことを確認
-    if pwd.chars().all(|c| c == pwd.chars().next().unwrap_or('a')) {
+    if analysis.all_same {
+        // 全て同じ文字でないことを確認
         return false;
     }
 

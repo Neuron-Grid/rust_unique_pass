@@ -12,9 +12,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+use fluent::FluentArgs;
 use rust_unique_pass::{
-    GenerationError, Result, StdioInterface, exit_code_for_error, generate_password_flow,
-    initialize_bundle, parse_args,
+    FlowReport, GenerationError, Result, StdioInterface, exit_code_for_error, fallback_translation,
+    generate_password_flow_with_min_score, get_global_rng, initialize_bundle, parse_args,
 };
 
 /// # Overview
@@ -34,8 +35,16 @@ async fn main() -> Result<()> {
     let args = parse_args();
     let bundle = initialize_bundle(&args)?;
     let mut ui = StdioInterface::default();
-    match generate_password_flow(&mut ui, &bundle, &args).await {
-        Ok(()) => Ok(()),
+    let min_score = resolve_min_score(&args);
+    let global_rng = get_global_rng()?;
+    let mut rng_stream = global_rng.stream();
+    match generate_password_flow_with_min_score(&mut ui, &bundle, &args, min_score, &mut rng_stream)
+        .await
+    {
+        Ok(report) => {
+            render_report(&mut ui, report, &args).await?;
+            Ok(())
+        }
         Err(e) => {
             // エラーコードのマッピング
             // 0: success
@@ -43,11 +52,72 @@ async fn main() -> Result<()> {
             // 2: 引数バリデーションエラー (clap が処理)
             // 3: strict未達
             let code = exit_code_for_error(&e);
-            // 生成フロー側で既に表示済みの strict 未達以外は stderr に通知する
-            if !matches!(e, GenerationError::StrictTargetUnmet) {
+            // strict未達はここでメッセージを生成してstderrに出力する
+            if matches!(e, GenerationError::StrictTargetUnmet) {
+                let err_msg = if args.quiet {
+                    format!(
+                        "Error: Could not reach target score {} within {} ms.",
+                        min_score, args.timeout_ms
+                    )
+                } else {
+                    let mut eargs = FluentArgs::new();
+                    eargs.set("targetScore", min_score as i64);
+                    eargs.set("budgetMs", args.timeout_ms as i64);
+                    fallback_translation(
+                        &bundle,
+                        "error_target_unmet_strict",
+                        &format!(
+                            "Error: Could not reach target score {} within {} ms.",
+                            min_score, args.timeout_ms
+                        ),
+                        Some(&eargs),
+                    )
+                };
+                eprintln!("{err_msg}");
+            } else {
                 eprintln!("{e}");
             }
             std::process::exit(code);
         }
     }
+}
+
+// debug ビルド時のみ、テスト用に min_score を上書きする。
+// 環境変数: RUPASS_TEST_MIN_SCORE (u8)
+fn resolve_min_score(args: &rust_unique_pass::RupassArgs) -> u8 {
+    let mut min_score = args.min_score;
+    if cfg!(debug_assertions)
+        && let Ok(raw) = std::env::var("RUPASS_TEST_MIN_SCORE")
+        && let Ok(value) = raw.trim().parse::<u8>()
+    {
+        min_score = value;
+    }
+    min_score
+}
+
+async fn render_report(
+    ui: &mut dyn rust_unique_pass::UserInterface,
+    report: FlowReport,
+    args: &rust_unique_pass::RupassArgs,
+) -> Result<()> {
+    if args.quiet {
+        ui.print(report.password.as_str()).await?;
+    } else {
+        if let Some(header) = report.header.as_ref() {
+            ui.print(header).await?;
+        }
+        ui.print(report.password.as_str()).await?;
+        if report.show_blank_line {
+            ui.print("").await?;
+        }
+        if let Some(line) = report.strength_line.as_ref() {
+            ui.print(line).await?;
+        }
+    }
+
+    for warning in report.warnings {
+        eprintln!("{warning}");
+    }
+
+    Ok(())
 }

@@ -1,7 +1,6 @@
 // src/crypto/secure_memory.rs のテストを分離
 
-use rust_unique_pass::crypto::CryptoError;
-use rust_unique_pass::crypto::secure_memory::*;
+use rust_unique_pass::{CryptoError, MemoryProtection, SecureMemory, SecureString};
 
 #[test]
 fn test_secure_string_creation() {

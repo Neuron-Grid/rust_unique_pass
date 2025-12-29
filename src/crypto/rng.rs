@@ -17,7 +17,6 @@ limitations under the License. */
 /// - 一時バッファはZeroizingで自動消去
 use crate::core::app_errors::Result as AppResult;
 use getrandom;
-use rand::{CryptoRng, RngCore};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 use zeroize::Zeroizing;
@@ -138,56 +137,6 @@ impl SecureRng {
         }
     }
 }
-
-/// fallible API を優先しつつ、`RngCore` が必要な場面向けのアダプタ。
-/// 失敗時はパニックするため、セキュリティ上の判断は呼び出し側に委ねる。
-pub struct SecureRngAdapter {
-    rng: SecureRng,
-}
-
-impl SecureRngAdapter {
-    pub fn new() -> AppResult<Self> {
-        Ok(Self {
-            rng: SecureRng::new()?,
-        })
-    }
-
-    pub fn from_rng(rng: SecureRng) -> Self {
-        Self { rng }
-    }
-
-    pub fn inner(&self) -> &SecureRng {
-        &self.rng
-    }
-
-    pub fn inner_mut(&mut self) -> &mut SecureRng {
-        &mut self.rng
-    }
-}
-
-impl RngCore for SecureRngAdapter {
-    fn next_u32(&mut self) -> u32 {
-        let mut bytes = [0u8; 4];
-        self.fill_bytes(&mut bytes);
-        u32::from_le_bytes(bytes)
-    }
-
-    fn next_u64(&mut self) -> u64 {
-        let mut bytes = [0u8; 8];
-        self.fill_bytes(&mut bytes);
-        u64::from_le_bytes(bytes)
-    }
-
-    fn fill_bytes(&mut self, dest: &mut [u8]) {
-        if let Err(e) = self.rng.generate_bytes(dest) {
-            if self.rng.reseed().is_ok() && self.rng.generate_bytes(dest).is_ok() {
-                return;
-            }
-            panic!("Secure RNG failure: {e}");
-        }
-    }
-}
-impl CryptoRng for SecureRngAdapter {}
 
 #[derive(Debug, Clone)]
 pub struct RngStatistics {

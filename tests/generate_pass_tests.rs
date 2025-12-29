@@ -15,9 +15,12 @@ limitations under the License. */
 use async_trait::async_trait;
 use fluent::{FluentBundle, FluentResource};
 use rust_unique_pass::{
-    GenerationError, Result, RupassArgs, UserInterface, generate_password_flow,
+    FlowReport, GenerationError, Result, RupassArgs, UserInterface, generate_password_flow,
 };
 use std::collections::VecDeque;
+
+mod common;
+use common::DeterministicByteStream;
 
 // Mock UI
 #[derive(Default)]
@@ -68,17 +71,14 @@ fn mock_bundle() -> FluentBundle<FluentResource> {
     bundle
 }
 
+fn test_rng(seed: u8) -> DeterministicByteStream {
+    DeterministicByteStream::from_seed([seed; 32])
+}
+
 // Helper
 // 生成されたパスワード行を取り出す
-fn extract_password(output: &str) -> Option<String> {
-    output
-        .split("Password Generation Result")
-        // 末尾側
-        .last()
-        // 改行と空白を除去
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .map(String::from)
+fn password_from(report: &FlowReport) -> &str {
+    report.password.as_str()
 }
 // Tests
 #[tokio::test(flavor = "current_thread")]
@@ -107,14 +107,14 @@ async fn normal_flow() {
 
     // lowercase? → "n"だけ回答
     let mut ui = MockUI::new(vec!["n", "n"]);
-    generate_password_flow(&mut ui, &mock_bundle(), &args)
+    let mut rng = test_rng(0x11);
+    let report = generate_password_flow(&mut ui, &mock_bundle(), &args, &mut rng)
         .await
         .unwrap();
 
-    let out = ui.outputs_joined();
-    let pwd = extract_password(&out).expect("password not found");
+    let pwd = password_from(&report);
     assert_eq!(pwd.len(), 15);
-    assert!(out.contains("Password Generation Result"));
+    assert_eq!(report.header.as_deref(), Some("Password Generation Result"));
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -146,7 +146,8 @@ async fn too_short_interactive() {
     let inputs = vec!["10", "14", "15", "n", "n", "y", "n"];
     let mut ui = MockUI::new(inputs);
 
-    generate_password_flow(&mut ui, &mock_bundle(), &args)
+    let mut rng = test_rng(0x12);
+    let _report = generate_password_flow(&mut ui, &mock_bundle(), &args, &mut rng)
         .await
         .unwrap();
 
@@ -181,7 +182,8 @@ async fn too_short_args() {
         quiet: false,
     };
     let mut ui = MockUI::default();
-    let err = generate_password_flow(&mut ui, &mock_bundle(), &args)
+    let mut rng = test_rng(0x13);
+    let err = generate_password_flow(&mut ui, &mock_bundle(), &args, &mut rng)
         .await
         .unwrap_err();
     assert!(matches!(err, GenerationError::InvalidLength));
@@ -211,7 +213,8 @@ async fn no_charset() {
     };
     // uppercase? n / lowercase? n / numbers? n / symbols? n
     let mut ui = MockUI::new(vec!["n", "n", "n", "n"]);
-    let err = generate_password_flow(&mut ui, &mock_bundle(), &args)
+    let mut rng = test_rng(0x14);
+    let err = generate_password_flow(&mut ui, &mock_bundle(), &args, &mut rng)
         .await
         .unwrap_err();
     assert!(matches!(err, GenerationError::NoCharacterSet));
@@ -241,12 +244,12 @@ async fn custom_symbols() {
     };
     // symbols? y → change? y → enter custom set
     let mut ui = MockUI::new(vec!["y", "y", "!?@#$%^&*()"]);
-    generate_password_flow(&mut ui, &mock_bundle(), &args)
+    let mut rng = test_rng(0x15);
+    let report = generate_password_flow(&mut ui, &mock_bundle(), &args, &mut rng)
         .await
         .unwrap();
 
-    let out = ui.outputs_joined();
-    let pwd = extract_password(&out).expect("password not found");
+    let pwd = password_from(&report);
     assert_eq!(pwd.len(), 15);
     assert!(pwd.chars().any(|c| "!?@#$%^&*()".contains(c)));
 }
@@ -274,11 +277,11 @@ async fn custom_symbols_via_option() {
         no_prompt: false,
     };
     let mut ui = MockUI::default();
-    generate_password_flow(&mut ui, &mock_bundle(), &args)
+    let mut rng = test_rng(0x16);
+    let report = generate_password_flow(&mut ui, &mock_bundle(), &args, &mut rng)
         .await
         .expect("generation should succeed with custom symbols option");
-    let out = ui.outputs_joined();
-    let pwd = extract_password(&out).expect("password not found");
+    let pwd = password_from(&report);
     assert!(pwd.chars().any(|c| "[]{}".contains(c)));
 }
 
@@ -306,11 +309,11 @@ async fn negative_flags_skip_prompts() {
     };
     // 否定フラグにより対話無しで進行するはず
     let mut ui = MockUI::default();
-    generate_password_flow(&mut ui, &mock_bundle(), &args)
+    let mut rng = test_rng(0x17);
+    let report = generate_password_flow(&mut ui, &mock_bundle(), &args, &mut rng)
         .await
         .expect("generation should succeed without prompts");
-    let out = ui.outputs_joined();
-    assert!(out.contains("Password Generation Result"));
-    let pwd = extract_password(&out).expect("password not found");
+    assert_eq!(report.header.as_deref(), Some("Password Generation Result"));
+    let pwd = password_from(&report);
     assert_eq!(pwd.len(), 16);
 }

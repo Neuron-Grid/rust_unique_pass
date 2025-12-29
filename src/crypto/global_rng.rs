@@ -40,6 +40,21 @@ pub trait ByteStream {
     fn consume(&mut self, n: usize);
 }
 
+// 参照でもByteStreamとして扱えるようにする
+impl<T: ByteStream + ?Sized> ByteStream for &mut T {
+    fn fill_next_block(&mut self) -> AppResult<()> {
+        (**self).fill_next_block()
+    }
+
+    fn remaining_bytes(&self) -> &[u8] {
+        (**self).remaining_bytes()
+    }
+
+    fn consume(&mut self, n: usize) {
+        (**self).consume(n);
+    }
+}
+
 impl GlobalRng {
     // 1MB
     const DEFAULT_RESEED_THRESHOLD: u64 = 1_048_576;
