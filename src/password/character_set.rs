@@ -59,13 +59,6 @@ pub async fn assemble_character_set(
     }
 
     if charset.is_empty() {
-        let msg = crate::core::utils::fallback_translation(
-            bundle,
-            "error_no_charset_selected",
-            "No valid character set was selected.",
-            None,
-        );
-        ui.print(&msg).await?;
         return Err(GenerationError::NoCharacterSet);
     }
 

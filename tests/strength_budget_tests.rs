@@ -14,6 +14,8 @@ use common::DeterministicByteStream;
 // Mock evaluator for deterministic scenarios
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+type TestResult<T> = std::result::Result<T, String>;
+
 // Sequence of scores to return; last value repeats
 struct MockEvaluator {
     seq: Vec<(u8, f64)>,
@@ -34,10 +36,10 @@ impl MockEvaluator {
 }
 
 impl PasswordStrengthEvaluator for MockEvaluator {
-    fn score_entropy(&self, _pwd: &str) -> (u8, f64) {
+    fn score_entropy(&self, _pwd: &str) -> Result<(u8, f64)> {
         let i = self.idx.fetch_add(1, Ordering::Relaxed);
         let pos = i.min(self.seq.len().saturating_sub(1));
-        self.seq[pos]
+        Ok(self.seq[pos])
     }
 }
 
@@ -67,12 +69,15 @@ impl UserInterface for MockUI {
 }
 
 // Use embedded English FTL for bundle
-fn mock_bundle() -> FluentBundle<FluentResource> {
+fn mock_bundle() -> TestResult<FluentBundle<FluentResource>> {
     static FTL_ENG: &str = include_str!("../translation/eng.ftl");
-    let res = FluentResource::try_new(FTL_ENG.to_owned()).expect("parse eng.ftl");
+    let res =
+        FluentResource::try_new(FTL_ENG.to_owned()).map_err(|e| format!("parse eng.ftl: {e:?}"))?;
     let mut bundle = FluentBundle::new(vec![]);
-    bundle.add_resource(res).expect("add resource");
     bundle
+        .add_resource(res)
+        .map_err(|e| format!("add resource: {e:?}"))?;
+    Ok(bundle)
 }
 
 fn test_rng(seed: u8) -> DeterministicByteStream {
@@ -88,7 +93,7 @@ fn produce_with(
     eval: &impl PasswordStrengthEvaluator,
     rng: &mut ChaCha8Rng,
     max_attempts: u64,
-) -> Option<(String, u8, f64, bool)> {
+) -> TestResult<Option<(String, u8, f64, bool)>> {
     use rand::RngCore;
     let mut attempts = 0;
     let mut best_pwd: Option<String> = None;
@@ -101,7 +106,7 @@ fn produce_with(
         // simple candidate: cycle bytes into indices
         let mut pwd = String::with_capacity(len);
         if all.is_empty() {
-            return None;
+            return Ok(None);
         }
         for byte in bytes.iter().take(len) {
             let idx = (*byte as usize) % all.len();
@@ -110,12 +115,18 @@ fn produce_with(
         if pwd.chars().count() < 8 {
             continue;
         }
-        if pwd.chars().all(|c| c == pwd.chars().next().unwrap()) {
+        let mut chars = pwd.chars();
+        let Some(first) = chars.next() else {
+            continue;
+        };
+        if chars.all(|c| c == first) {
             continue;
         }
-        let (score, bits) = eval.score_entropy(&pwd);
+        let (score, bits) = eval
+            .score_entropy(&pwd)
+            .map_err(|e| format!("score_entropy failed: {e}"))?;
         if score >= min_score {
-            return Some((pwd, score, bits, true));
+            return Ok(Some((pwd, score, bits, true)));
         }
         if score > best_score || (score == best_score && bits > best_bits) {
             best_score = score;
@@ -123,11 +134,11 @@ fn produce_with(
             best_pwd = Some(pwd);
         }
     }
-    best_pwd.map(|p| (p, best_score, best_bits, false))
+    Ok(best_pwd.map(|p| (p, best_score, best_bits, false)))
 }
 
 #[test]
-fn early_exit_when_target_reached() {
+fn early_exit_when_target_reached() -> TestResult<()> {
     // All ascii lower-case characters
     let all: Vec<char> = (b'a'..=b'z').map(|c| c as char).collect();
     let req: Vec<Vec<char>> = vec![];
@@ -135,16 +146,18 @@ fn early_exit_when_target_reached() {
     // Score sequence: 0, 0, then 4 with some entropy
     let eval = MockEvaluator::new(vec![(0, 10.0), (0, 12.0), (4, 80.0)]);
 
-    let res =
-        produce_with(&all, &req, 12, 4, &eval, &mut rng, 100).expect("should produce a candidate");
+    let res = produce_with(&all, &req, 12, 4, &eval, &mut rng, 100)
+        .map_err(|e| format!("produce_with failed: {e}"))?;
+    let res = res.ok_or_else(|| "expected to produce a candidate".to_string())?;
 
     let (_pwd, score, _bits, reached) = res;
     assert_eq!(score, 4);
     assert!(reached, "should early exit on reaching target score");
+    Ok(())
 }
 
 #[test]
-fn best_effort_when_unmet_non_strict() {
+fn best_effort_when_unmet_non_strict() -> TestResult<()> {
     let all: Vec<char> = (b'a'..=b'z').map(|c| c as char).collect();
     let req: Vec<Vec<char>> = vec![];
     let mut rng = ChaCha8Rng::from_seed([9u8; 32]);
@@ -152,16 +165,18 @@ fn best_effort_when_unmet_non_strict() {
     let eval = MockEvaluator::new(vec![(3, 57.1)]);
 
     let res = produce_with(&all, &req, 12, 4, &eval, &mut rng, 256)
-        .expect("should return best effort candidate");
+        .map_err(|e| format!("produce_with failed: {e}"))?;
+    let res = res.ok_or_else(|| "expected a best effort candidate".to_string())?;
 
     let (_pwd, score, bits, reached) = res;
     assert_eq!(score, 3);
     assert!((bits - 57.1).abs() < 0.05);
     assert!(!reached);
+    Ok(())
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn quiet_output_is_password_only() {
+async fn quiet_output_is_password_only() -> TestResult<()> {
     let args = RupassArgs {
         language: None,
         password_length: Some(15),
@@ -185,18 +200,20 @@ async fn quiet_output_is_password_only() {
 
     let mut ui = MockUI::new(vec!["n", "n"]);
     let mut rng = test_rng(0x21);
-    let report = generate_password_flow(&mut ui, &mock_bundle(), &args, &mut rng)
+    let bundle = mock_bundle()?;
+    let report = generate_password_flow(&mut ui, &bundle, &args, &mut rng)
         .await
-        .expect("generation should succeed");
+        .map_err(|e| format!("generation failed: {e}"))?;
     // Only the password, no heading nor strength
     assert!(report.header.is_none());
     assert!(report.strength_line.is_none());
     assert!(report.warnings.is_empty());
     assert!(!report.password.as_str().is_empty());
+    Ok(())
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn show_strength_adds_line() {
+async fn show_strength_adds_line() -> TestResult<()> {
     let args = RupassArgs {
         language: None,
         password_length: Some(15),
@@ -219,9 +236,10 @@ async fn show_strength_adds_line() {
     };
     let mut ui = MockUI::new(vec!["n", "n"]);
     let mut rng = test_rng(0x22);
-    let report = generate_password_flow(&mut ui, &mock_bundle(), &args, &mut rng)
+    let bundle = mock_bundle()?;
+    let report = generate_password_flow(&mut ui, &bundle, &args, &mut rng)
         .await
-        .expect("generation should succeed");
+        .map_err(|e| format!("generation failed: {e}"))?;
     assert_eq!(report.header.as_deref(), Some("Password Generation Result"));
     assert!(
         report
@@ -230,10 +248,11 @@ async fn show_strength_adds_line() {
             .unwrap_or_default()
             .contains("Strength:")
     );
+    Ok(())
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn evaluator_injection_is_used_in_flow() {
+async fn evaluator_injection_is_used_in_flow() -> TestResult<()> {
     let args = RupassArgs {
         language: None,
         password_length: Some(15),
@@ -258,15 +277,10 @@ async fn evaluator_injection_is_used_in_flow() {
     let evaluator = MockEvaluator::new(vec![(4, 80.0)]);
     let mut ui = MockUI::default();
     let mut rng = test_rng(0x23);
-    let res = generate_password_flow_with_evaluator(
-        &mut ui,
-        &mock_bundle(),
-        &args,
-        &evaluator,
-        &mut rng,
-    )
-    .await;
-
-    assert!(res.is_ok());
+    let bundle = mock_bundle()?;
+    generate_password_flow_with_evaluator(&mut ui, &bundle, &args, &evaluator, &mut rng)
+        .await
+        .map_err(|e| format!("generation failed: {e}"))?;
     assert!(evaluator.call_count() > 0);
+    Ok(())
 }

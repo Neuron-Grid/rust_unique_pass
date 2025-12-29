@@ -74,6 +74,14 @@ async fn main() -> Result<()> {
                     )
                 };
                 eprintln!("{err_msg}");
+            } else if matches!(e, GenerationError::NoCharacterSet) {
+                let err_msg = fallback_translation(
+                    &bundle,
+                    "error_no_charset_selected",
+                    "Error: No character set selected.",
+                    None,
+                );
+                eprintln!("{err_msg}");
             } else {
                 eprintln!("{e}");
             }

@@ -22,6 +22,8 @@ use std::collections::VecDeque;
 mod common;
 use common::DeterministicByteStream;
 
+type TestResult<T> = std::result::Result<T, String>;
+
 // Mock UI
 #[derive(Default)]
 struct MockUI {
@@ -57,18 +59,18 @@ impl UserInterface for MockUI {
 // プロダクションと同一のリソースで検証できるようにする。
 // これにより **翻訳キーの逸脱** をテスト段階で検出でき、
 // i18n 機能の信頼性が向上する。  (評価項目: テスト/保守性)
-fn mock_bundle() -> FluentBundle<FluentResource> {
+fn mock_bundle() -> TestResult<FluentBundle<FluentResource>> {
     // ビルド時に埋め込むことで CI でもパスを気にせず利用可能
     // ※ include_str! はリテラルパス必須のため相対指定
     static FTL_ENG: &str = include_str!("../translation/eng.ftl");
 
-    let res =
-        FluentResource::try_new(FTL_ENG.to_owned()).expect("Failed to parse eng.ftl for tests");
+    let res = FluentResource::try_new(FTL_ENG.to_owned())
+        .map_err(|e| format!("parse eng.ftl failed: {e:?}"))?;
     let mut bundle = FluentBundle::new(vec![]);
     bundle
         .add_resource(res)
-        .expect("Failed to add resource to FluentBundle");
-    bundle
+        .map_err(|e| format!("add resource failed: {e:?}"))?;
+    Ok(bundle)
 }
 
 fn test_rng(seed: u8) -> DeterministicByteStream {
@@ -82,7 +84,7 @@ fn password_from(report: &FlowReport) -> &str {
 }
 // Tests
 #[tokio::test(flavor = "current_thread")]
-async fn normal_flow() {
+async fn normal_flow() -> TestResult<()> {
     // 事前に長さ + フラグを固定
     let args = RupassArgs {
         language: None,
@@ -108,17 +110,19 @@ async fn normal_flow() {
     // lowercase? → "n"だけ回答
     let mut ui = MockUI::new(vec!["n", "n"]);
     let mut rng = test_rng(0x11);
-    let report = generate_password_flow(&mut ui, &mock_bundle(), &args, &mut rng)
+    let bundle = mock_bundle()?;
+    let report = generate_password_flow(&mut ui, &bundle, &args, &mut rng)
         .await
-        .unwrap();
+        .map_err(|e| format!("generation failed: {e:?}"))?;
 
     let pwd = password_from(&report);
     assert_eq!(pwd.len(), 15);
     assert_eq!(report.header.as_deref(), Some("Password Generation Result"));
+    Ok(())
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn too_short_interactive() {
+async fn too_short_interactive() -> TestResult<()> {
     // すべてフラグ無しで対話
     let args = RupassArgs {
         language: None,
@@ -147,19 +151,21 @@ async fn too_short_interactive() {
     let mut ui = MockUI::new(inputs);
 
     let mut rng = test_rng(0x12);
-    let _report = generate_password_flow(&mut ui, &mock_bundle(), &args, &mut rng)
+    let bundle = mock_bundle()?;
+    let _report = generate_password_flow(&mut ui, &bundle, &args, &mut rng)
         .await
-        .unwrap();
+        .map_err(|e| format!("generation failed: {e:?}"))?;
 
     let short_msg_count = ui
         .outputs_joined()
         .matches("A minimum of 15 characters is recommended for passwords.")
         .count();
     assert_eq!(short_msg_count, 2);
+    Ok(())
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn too_short_args() {
+async fn too_short_args() -> TestResult<()> {
     let args = RupassArgs {
         language: None,
         // 不正
@@ -183,14 +189,22 @@ async fn too_short_args() {
     };
     let mut ui = MockUI::default();
     let mut rng = test_rng(0x13);
-    let err = generate_password_flow(&mut ui, &mock_bundle(), &args, &mut rng)
-        .await
-        .unwrap_err();
-    assert!(matches!(err, GenerationError::InvalidLength));
+    let bundle = mock_bundle()?;
+    let result = generate_password_flow(&mut ui, &bundle, &args, &mut rng).await;
+    match result {
+        Ok(_) => Err("expected InvalidLength error".to_string()),
+        Err(err) => {
+            if matches!(err, GenerationError::InvalidLength) {
+                Ok(())
+            } else {
+                Err(format!("unexpected error: {err:?}"))
+            }
+        }
+    }
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn no_charset() {
+async fn no_charset() -> TestResult<()> {
     let args = RupassArgs {
         language: None,
         password_length: Some(15),
@@ -214,14 +228,22 @@ async fn no_charset() {
     // uppercase? n / lowercase? n / numbers? n / symbols? n
     let mut ui = MockUI::new(vec!["n", "n", "n", "n"]);
     let mut rng = test_rng(0x14);
-    let err = generate_password_flow(&mut ui, &mock_bundle(), &args, &mut rng)
-        .await
-        .unwrap_err();
-    assert!(matches!(err, GenerationError::NoCharacterSet));
+    let bundle = mock_bundle()?;
+    let result = generate_password_flow(&mut ui, &bundle, &args, &mut rng).await;
+    match result {
+        Ok(_) => Err("expected NoCharacterSet error".to_string()),
+        Err(err) => {
+            if matches!(err, GenerationError::NoCharacterSet) {
+                Ok(())
+            } else {
+                Err(format!("unexpected error: {err:?}"))
+            }
+        }
+    }
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn custom_symbols() {
+async fn custom_symbols() -> TestResult<()> {
     let args = RupassArgs {
         language: None,
         password_length: Some(15),
@@ -245,17 +267,19 @@ async fn custom_symbols() {
     // symbols? y → change? y → enter custom set
     let mut ui = MockUI::new(vec!["y", "y", "!?@#$%^&*()"]);
     let mut rng = test_rng(0x15);
-    let report = generate_password_flow(&mut ui, &mock_bundle(), &args, &mut rng)
+    let bundle = mock_bundle()?;
+    let report = generate_password_flow(&mut ui, &bundle, &args, &mut rng)
         .await
-        .unwrap();
+        .map_err(|e| format!("generation failed: {e:?}"))?;
 
     let pwd = password_from(&report);
     assert_eq!(pwd.len(), 15);
     assert!(pwd.chars().any(|c| "!?@#$%^&*()".contains(c)));
+    Ok(())
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn custom_symbols_via_option() {
+async fn custom_symbols_via_option() -> TestResult<()> {
     let args = RupassArgs {
         language: None,
         password_length: Some(16),
@@ -278,15 +302,17 @@ async fn custom_symbols_via_option() {
     };
     let mut ui = MockUI::default();
     let mut rng = test_rng(0x16);
-    let report = generate_password_flow(&mut ui, &mock_bundle(), &args, &mut rng)
+    let bundle = mock_bundle()?;
+    let report = generate_password_flow(&mut ui, &bundle, &args, &mut rng)
         .await
-        .expect("generation should succeed with custom symbols option");
+        .map_err(|e| format!("generation failed: {e:?}"))?;
     let pwd = password_from(&report);
     assert!(pwd.chars().any(|c| "[]{}".contains(c)));
+    Ok(())
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn negative_flags_skip_prompts() {
+async fn negative_flags_skip_prompts() -> TestResult<()> {
     let args = RupassArgs {
         language: None,
         password_length: Some(16),
@@ -310,10 +336,12 @@ async fn negative_flags_skip_prompts() {
     // 否定フラグにより対話無しで進行するはず
     let mut ui = MockUI::default();
     let mut rng = test_rng(0x17);
-    let report = generate_password_flow(&mut ui, &mock_bundle(), &args, &mut rng)
+    let bundle = mock_bundle()?;
+    let report = generate_password_flow(&mut ui, &bundle, &args, &mut rng)
         .await
-        .expect("generation should succeed without prompts");
+        .map_err(|e| format!("generation failed: {e:?}"))?;
     assert_eq!(report.header.as_deref(), Some("Password Generation Result"));
     let pwd = password_from(&report);
     assert_eq!(pwd.len(), 16);
+    Ok(())
 }

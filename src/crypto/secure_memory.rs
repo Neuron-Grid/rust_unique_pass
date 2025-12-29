@@ -28,6 +28,7 @@ use std::alloc::{Layout, alloc, dealloc};
 use std::io;
 use std::mem::ManuallyDrop;
 use std::ptr::{self, NonNull};
+use subtle::{Choice, ConstantTimeEq};
 use zeroize::Zeroize;
 
 /// プラットフォーム固有のメモリ保護機能を提供
@@ -301,13 +302,13 @@ impl SecureString {
     /// 文字列として参照
     /// # Returns
     /// 内部データが有効なUTF-8の場合、文字列スライスを返します。
-    /// 無効なUTF-8の場合、空文字列を返します（安全性のため）。
+    /// 無効なUTF-8の場合、`None`を返します。
     ///
     /// # Notes
     /// より厳密なエラーハンドリングが必要な場合は`try_as_str()`を使用してください。
-    pub fn as_str(&self) -> &str {
+    pub fn as_str(&self) -> Option<&str> {
         let slice = &self.data.as_slice()[..self.len];
-        std::str::from_utf8(slice).unwrap_or("")
+        std::str::from_utf8(slice).ok()
     }
 
     /// 文字列として安全に参照
@@ -373,12 +374,17 @@ impl MemoryProtection {
 
     /// セキュアなメモリ比較
     pub fn secure_compare(a: &[u8], b: &[u8]) -> bool {
-        use subtle::ConstantTimeEq;
+        let len = a.len().max(b.len());
+        let mut result = Choice::from(1u8);
 
-        if a.len() != b.len() {
-            return false;
+        result &= a.len().ct_eq(&b.len());
+
+        for i in 0..len {
+            let a_byte = if i < a.len() { a[i] } else { 0 };
+            let b_byte = if i < b.len() { b[i] } else { 0 };
+            result &= a_byte.ct_eq(&b_byte);
         }
 
-        a.ct_eq(b).unwrap_u8() == 1
+        result.unwrap_u8() == 1
     }
 }

@@ -55,6 +55,12 @@ pub enum GenerationError {
     /// OSからのエントロピー取得に失敗した場合に発生します。
     #[error("Failed to gather entropy from the operating system.")]
     EntropyError(#[from] getrandom::Error),
+    /// RNG処理に失敗した場合に発生します。
+    #[error("Random generation failed: {0}")]
+    RngFailure(String),
+    /// 強度評価に失敗した場合に発生します。
+    #[error("Password strength evaluation failed: {0}")]
+    StrengthEvaluationError(String),
 }
 
 /// # Overview

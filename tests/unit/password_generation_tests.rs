@@ -94,7 +94,7 @@ fn assemble_random_password_with_rng(
 }
 
 #[test]
-fn fisher_yates_executes_all_swaps() {
+fn fisher_yates_executes_all_swaps() -> std::result::Result<(), String> {
     use rand::SeedableRng;
     use rand_chacha::ChaCha8Rng;
 
@@ -110,10 +110,11 @@ fn fisher_yates_executes_all_swaps() {
     let len = 32;
 
     let outcome = assemble_random_password_with_rng(&mut rng, &all_vec, len, &req)
-        .expect("ランダムパスワード生成に失敗しました")
-        .expect("ランダムパスワード生成に失敗しました");
+        .map_err(|e| format!("password generation failed: {e:?}"))?
+        .ok_or_else(|| "password generation returned None".to_string())?;
 
     assert_eq!(outcome.password.chars().count(), len);
     assert_eq!(outcome.swap_count, len.saturating_sub(1));
     assert!(outcome.bytes_consumed >= outcome.swap_count * std::mem::size_of::<u64>());
+    Ok(())
 }

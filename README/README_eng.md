@@ -64,6 +64,13 @@ is `rupass`.
 - Use `--show-strength` to print a strength line like `Strength: 4/4 (entropy: 82.3 bits)`.
 - In `--strict` mode, the program exits with code 3 if the target score is not met within the budget and does not print the password.
 
+## Security & Scope
+
+- **Threat model**: local CLI usage on a trusted machine. This project focuses on generating strong passwords; it does not protect against attackers with live process memory access or compromised OS.
+- **Side-channel notes**: timing-safe helpers are best-effort and their runtime scales with input length. Do not assume strict constant-time guarantees.
+- **Entropy policy**: production paths use OS entropy per byte; deterministic RNGs are used only in tests.
+- **64-bit targets**: only 64-bit is supported. A build-time guard is enforced; you can override it with `--features allow-32bit` for experimental builds.
+
 ## About Language Settings
 
 - **Languages supported**

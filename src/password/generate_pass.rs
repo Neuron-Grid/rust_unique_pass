@@ -81,15 +81,7 @@ pub async fn generate_password_flow(
     args: &RupassArgs,
     rng: &mut impl ByteStream,
 ) -> Result<FlowReport> {
-    generate_password_flow_internal(
-        ui,
-        bundle,
-        args,
-        args.min_score,
-        &ZxcvbnEvaluator,
-        rng,
-    )
-    .await
+    generate_password_flow_internal(ui, bundle, args, args.min_score, &ZxcvbnEvaluator, rng).await
 }
 
 #[doc(alias = "generate")]
@@ -117,10 +109,7 @@ pub async fn generate_password_flow_with_evaluator(
     evaluator: &dyn PasswordStrengthEvaluator,
     rng: &mut impl ByteStream,
 ) -> Result<FlowReport> {
-    generate_password_flow_internal(
-        ui, bundle, args, args.min_score, evaluator, rng,
-    )
-    .await
+    generate_password_flow_internal(ui, bundle, args, args.min_score, evaluator, rng).await
 }
 
 /// # Overview

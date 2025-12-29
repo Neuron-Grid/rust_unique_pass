@@ -178,6 +178,11 @@ impl ByteStream for GlobalRngStream {
 
     fn consume(&mut self, n: usize) {
         let take = n.min(self.available);
+        if take > 0 {
+            let start = self.cursor;
+            let end = start.saturating_add(take).min(self.cache.len());
+            self.cache.as_mut()[start..end].zeroize();
+        }
         self.cursor = (self.cursor + take).min(self.cache.len());
         self.available = self.available.saturating_sub(take);
         if self.available == 0 {

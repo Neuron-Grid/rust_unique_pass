@@ -42,18 +42,17 @@ pub(crate) struct GenerationOutcome {
 
 /// 強度評価抽象化トレイト
 pub trait PasswordStrengthEvaluator {
-    fn score_entropy(&self, pwd: &str) -> (u8, f64);
+    fn score_entropy(&self, pwd: &str) -> Result<(u8, f64)>;
 }
 
 /// 実装: zxcvbn を用いた評価器
 pub struct ZxcvbnEvaluator;
 
 impl PasswordStrengthEvaluator for ZxcvbnEvaluator {
-    fn score_entropy(&self, pwd: &str) -> (u8, f64) {
-        match zxcvbn_entropy_score(pwd) {
-            Ok((bits, score)) => (score, bits),
-            Err(_e) => (0, 0.0),
-        }
+    fn score_entropy(&self, pwd: &str) -> Result<(u8, f64)> {
+        let (bits, score) =
+            zxcvbn_entropy_score(pwd).map_err(GenerationError::StrengthEvaluationError)?;
+        Ok((score, bits))
     }
 }
 
@@ -189,7 +188,13 @@ fn produce_password_within_time_sync_with_sampler_and_clock<S: ByteStream, C: Cl
                 continue;
             }
 
-            let (score, bits) = evaluator.score_entropy(&candidate);
+            let (score, bits) = match evaluator.score_entropy(&candidate) {
+                Ok(value) => value,
+                Err(err) => {
+                    candidate.zeroize();
+                    return Err(err);
+                }
+            };
 
             // ベスト更新ルール: スコア優先、同点ならエントロピー優先
             if score > best_score || (score == best_score && bits > best_bits) {
@@ -234,6 +239,7 @@ fn produce_password_within_time_sync_with_sampler_and_clock<S: ByteStream, C: Cl
     Err(GenerationError::GenerationFailed)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn produce_password_within_time_sync<S: ByteStream + ?Sized>(
     rng: &mut S,
     all_vec: &[char],
@@ -269,6 +275,7 @@ pub(crate) fn produce_password_within_time_sync<S: ByteStream + ?Sized>(
 /// # Arguments
 /// * `rng`: バイトストリームを提供する乱数ソース。
 #[allow(clippy::unused_async)]
+#[allow(clippy::too_many_arguments)]
 pub async fn produce_password_within_time(
     rng: &mut impl ByteStream,
     all_vec: &[char],
@@ -280,14 +287,7 @@ pub async fn produce_password_within_time(
     evaluator: &dyn PasswordStrengthEvaluator,
 ) -> Result<GenerationOutcome> {
     produce_password_within_time_sync(
-        rng,
-        all_vec,
-        req,
-        len,
-        timeout_ms,
-        min_score,
-        strict,
-        evaluator,
+        rng, all_vec, req, len, timeout_ms, min_score, strict, evaluator,
     )
 }
 

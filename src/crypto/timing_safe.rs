@@ -22,7 +22,8 @@ limitations under the License. */
 /// - 固定回数の処理でタイミング差を平坦化し、必要に応じて一様性を優先
 /// - subtleクレート等の業界標準技術を活用
 ///
-use rand::RngCore;
+use crate::core::app_errors::{GenerationError, Result};
+use rand::{CryptoRng, RngCore, TryRngCore};
 use std::sync::atomic::{AtomicU64, Ordering};
 use subtle::{Choice, ConstantTimeEq};
 
@@ -78,6 +79,7 @@ impl TimingSafeOps {
     /// - 文字列長が異なる場合も定時間で比較
     /// - subtleクレートによる定時間比較
     /// - タイミング攻撃を防止
+    /// - 入力長に比例して処理量が変わるため、長さの情報は漏れる可能性がある
     pub fn constant_time_compare(a: &str, b: &str) -> bool {
         if a.len() != b.len() {
             // 長さが異なる場合も、定時間で比較を行う
@@ -89,6 +91,7 @@ impl TimingSafeOps {
 
     /// バイト列の定時間比較
     /// 長さが異なる場合も対応
+    /// 入力長に比例して処理量が変わるため、長さの情報は漏れる可能性がある
     fn constant_time_compare_bytes(a: &[u8], b: &[u8]) -> bool {
         let len = a.len().max(b.len());
         let mut result = Choice::from(1u8);
@@ -108,6 +111,10 @@ impl TimingSafeOps {
     }
 
     /// ダミー操作によるタイミングノイズ追加
+    ///
+    /// # 注意
+    /// この処理は「定時間保証」を提供しません。
+    /// 実行時間のばらつきを増やすための近似的な手法です。
     pub fn add_timing_noise() {
         static COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -128,9 +135,15 @@ impl TimingSafeOps {
     /// - 固定回数の試行で定時間性を重視しつつ、失敗時は一様性を優先するハイブリッド方式
     /// - ハイブリッドで候補が得られない場合はリジェクションサンプリングでバイアス排除を優先
     /// - 定時間性は近似であり、厳密保証ではない
-    pub fn secure_random_index(rng: &mut impl RngCore, max: usize) -> usize {
+    ///
+    /// # Errors
+    /// RNGが失敗した場合はエラーを返します。
+    pub fn secure_random_index<R>(rng: &mut R, max: usize) -> Result<usize>
+    where
+        R: RngCore + CryptoRng + ?Sized,
+    {
         if max == 0 {
-            return 0;
+            return Ok(0);
         }
 
         // 2の累乗に切り上げ
@@ -143,11 +156,8 @@ impl TimingSafeOps {
         let mut selected = 0usize;
         let mut selected_flag = 0u8;
 
-        const USIZE_BYTES: usize = std::mem::size_of::<usize>();
         for _ in 0..Self::HYBRID_ATTEMPTS {
-            let mut bytes = [0u8; USIZE_BYTES];
-            rng.fill_bytes(&mut bytes);
-            let random_value = usize::from_le_bytes(bytes);
+            let random_value = Self::next_random_usize(rng)?;
             let candidate = random_value & mask;
             let valid = (candidate < max) as u8;
             let take = valid & (selected_flag ^ 1);
@@ -158,20 +168,29 @@ impl TimingSafeOps {
         }
 
         if selected_flag == 1 {
-            return selected;
+            return Ok(selected);
         }
 
         // フォールバック: バイアス排除を優先
         loop {
-            let mut bytes = [0u8; USIZE_BYTES];
-            rng.fill_bytes(&mut bytes);
-            let random_value = usize::from_le_bytes(bytes);
+            let random_value = Self::next_random_usize(rng)?;
             let candidate = random_value & mask;
             if candidate < max {
-                return candidate;
+                return Ok(candidate);
             }
             Self::add_timing_noise();
         }
+    }
+
+    fn next_random_usize<R>(rng: &mut R) -> Result<usize>
+    where
+        R: RngCore + CryptoRng + ?Sized,
+    {
+        const USIZE_BYTES: usize = std::mem::size_of::<usize>();
+        let mut bytes = [0u8; USIZE_BYTES];
+        rng.try_fill_bytes(&mut bytes)
+            .map_err(|err| GenerationError::RngFailure(err.to_string()))?;
+        Ok(usize::from_le_bytes(bytes))
     }
 }
 
@@ -206,16 +225,21 @@ impl TimingSafeOps {
     /// - Fisher-Yatesアルゴリズムを用い、定時間性に配慮したインデックス選択を行う
     /// - 各swap操作ごとにタイミングノイズを挿入
     /// - 定時間性は近似であり、必要に応じて一様性を優先
-    pub fn secure_shuffle<T: Clone>(items: &mut [T], rng: &mut impl RngCore) {
+    pub fn secure_shuffle<T: Clone, R>(items: &mut [T], rng: &mut R) -> Result<()>
+    where
+        R: RngCore + CryptoRng + ?Sized,
+    {
         let len = items.len();
 
         for i in (1..len).rev() {
             // セキュアなインデックス生成
-            let j = TimingSafeOps::secure_random_index(rng, i + 1);
+            let j = TimingSafeOps::secure_random_index(rng, i + 1)?;
             items.swap(i, j);
 
             // タイミングノイズ
             TimingSafeOps::add_timing_noise();
         }
+
+        Ok(())
     }
 }

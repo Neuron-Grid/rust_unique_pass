@@ -110,6 +110,9 @@ impl SecureRng {
 
     /// 再シード
     /// 手動呼び出しまたは自動実行
+    /// # 注意
+    /// 本実装はOSのエントロピー取得が可能かを確認しつつ内部統計をリセットします。
+    /// 乱数の生成自体は毎回OSから直接取得するため、内部状態の再シードは行いません。
     pub fn reseed(&self) -> AppResult<()> {
         let mut probe = Zeroizing::new([0u8; 32]);
         getrandom::fill(probe.as_mut())?;

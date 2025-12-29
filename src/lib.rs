@@ -12,6 +12,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
+// 64-bit環境のみを対象とするため、ビルド時に明示的にガードする
+#[cfg(all(not(target_pointer_width = "64"), not(feature = "allow-32bit")))]
+compile_error!(
+    "This crate currently supports only 64-bit targets. Enable the `allow-32bit` feature to override this check."
+);
+
 mod cli;
 mod core;
 mod crypto;
@@ -29,11 +35,11 @@ pub use core::{GenerationError, Result};
 pub use core::{ask_user_yes_no, fallback_translation, parse_yes_no_input, prompt_loop};
 /// 国際化対応のためのロケールバンドルを初期化します。
 pub use core::{get_translation, initialize_bundle};
+pub use crypto::global_rng::{ByteStream, GlobalRng, GlobalRngStream};
 /// 暗号/ユーティリティ系の公開API。
 pub use crypto::{CryptoError, GlobalRngStatistics, RngStatistics, SecureMemory, SecureRng};
 pub use crypto::{MAX_PASSWORD_BYTES, MAX_PASSWORD_CHARS, zxcvbn_entropy_score};
 pub use crypto::{MemoryProtection, SecureString, TimingSafeOps, get_global_rng};
-pub use crypto::global_rng::{ByteStream, GlobalRng, GlobalRngStream};
 /// パスワード生成の主要なフローを処理します。
 pub use password::{
     FlowReport, PasswordStrengthEvaluator, generate_password_flow,

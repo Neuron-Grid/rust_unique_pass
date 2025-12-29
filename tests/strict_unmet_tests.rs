@@ -6,6 +6,8 @@ use rust_unique_pass::{
 mod common;
 use common::DeterministicByteStream;
 
+type TestResult<T> = std::result::Result<T, String>;
+
 #[derive(Default)]
 struct MockUI {}
 
@@ -22,7 +24,7 @@ impl UserInterface for MockUI {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn strict_unmet_returns_error_when_min_score_unreachable() {
+async fn strict_unmet_returns_error_when_min_score_unreachable() -> TestResult<()> {
     let args = RupassArgs {
         language: None,
         password_length: Some(15),
@@ -44,10 +46,11 @@ async fn strict_unmet_returns_error_when_min_score_unreachable() {
         quiet: true,
     };
 
-    let bundle = initialize_bundle(&args).expect("bundle should initialize");
+    let bundle = initialize_bundle(&args).map_err(|e| format!("bundle init failed: {e:?}"))?;
     let mut ui = MockUI::default();
     let mut rng = DeterministicByteStream::from_seed([0x31; 32]);
     let res = generate_password_flow(&mut ui, &bundle, &args, &mut rng).await;
 
     assert!(matches!(res, Err(GenerationError::StrictTargetUnmet)));
+    Ok(())
 }

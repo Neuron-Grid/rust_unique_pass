@@ -16,6 +16,8 @@ use clap::Parser;
 use fluent::FluentArgs;
 use rust_unique_pass::{GenerationError, RupassArgs, get_translation, initialize_bundle};
 
+type TestResult<T> = std::result::Result<T, String>;
+
 /// ショートエイリアス（-lや-pなど）のテスト
 #[test]
 fn test_parse_args_short_aliases() {
@@ -87,7 +89,7 @@ fn test_initialize_bundle_unsupported_language() {
 
 /// 翻訳キーが存在しない場合 -> TranslationMissing エラー
 #[test]
-fn test_get_translation_missing_key() {
+fn test_get_translation_missing_key() -> TestResult<()> {
     let args = RupassArgs {
         language: None,
         password_length: None,
@@ -109,14 +111,15 @@ fn test_get_translation_missing_key() {
         quiet: false,
     };
     // デフォルト言語(eng)でロード
-    let bundle = initialize_bundle(&args).expect("Should load default eng resource");
+    let bundle = initialize_bundle(&args).map_err(|e| format!("bundle init failed: {e:?}"))?;
     let res = get_translation(&bundle, "this_key_does_not_exist", None);
     assert!(matches!(res, Err(GenerationError::TranslationMissing(_))));
+    Ok(())
 }
 
 /// FluentArgsの挿入テスト
 #[test]
-fn test_get_translation_with_args() {
+fn test_get_translation_with_args() -> TestResult<()> {
     let args = RupassArgs {
         language: None,
         password_length: None,
@@ -137,32 +140,24 @@ fn test_get_translation_with_args() {
         show_strength: false,
         quiet: false,
     };
-    let bundle = initialize_bundle(&args).expect("Should load default eng resource");
+    let bundle = initialize_bundle(&args).map_err(|e| format!("bundle init failed: {e:?}"))?;
 
     let mut fluent_args = FluentArgs::new();
     fluent_args.set("specialChars", "!@#$");
-    let text = get_translation(&bundle, "default_special_chars_message", Some(&fluent_args));
-
-    match text {
-        Ok(s) => {
-            // eng.ftl には "The special character used by default is { $specialChars }." 等が定義
-            assert!(
-                s.contains("!@#$"),
-                "Should contain the special chars in the message"
-            );
-        }
-        Err(_) => {
-            // キーが存在しない or バンドルがロードされない場合
-            // デフォルトの翻訳ファイルにキーが無いなら失敗するかもしれません
-            panic!("Expected to get a valid translation with inserted args.");
-        }
-    }
+    let text = get_translation(&bundle, "default_special_chars_message", Some(&fluent_args))
+        .map_err(|e| format!("translation failed: {e:?}"))?;
+    // eng.ftl には "The special character used by default is { $specialChars }." 等が定義
+    assert!(
+        text.contains("!@#$"),
+        "Should contain the special chars in the message"
+    );
+    Ok(())
 }
 
 /// 明示的に "jpn" を指定して翻訳バンドルを初期化
 /// 一部のキーを取り出して日本語になっていることを確認。
 #[test]
-fn test_initialize_bundle_jpn() {
+fn test_initialize_bundle_jpn() -> TestResult<()> {
     let args = RupassArgs {
         language: Some("jpn".to_string()),
         password_length: None,
@@ -185,23 +180,22 @@ fn test_initialize_bundle_jpn() {
     };
 
     // jpn.ftl がちゃんと埋め込まれていればロードできるはず
-    let bundle = initialize_bundle(&args);
-    assert!(bundle.is_ok(), "Should load jpn resource without error");
-    let bundle = bundle.unwrap();
+    let bundle = initialize_bundle(&args).map_err(|e| format!("bundle init failed: {e:?}"))?;
 
     // "question_special_chars" のキーを取り出す
     let question_special_chars = get_translation(&bundle, "question_special_chars", None)
-        .expect("Should find question_special_chars in jpn.ftl");
+        .map_err(|e| format!("translation failed: {e:?}"))?;
     // jpn.ftl の定義では「特殊文字を含めますか？」になっている
     assert!(
         question_special_chars.contains("特殊文字を含めますか？"),
         "Should contain Japanese text"
     );
+    Ok(())
 }
 
 /// ISO639-1コードのエイリアスでも英語リソースを取得できることを確認
 #[test]
-fn test_initialize_bundle_en_alias() {
+fn test_initialize_bundle_en_alias() -> TestResult<()> {
     let args = RupassArgs {
         language: Some("en".to_string()),
         password_length: None,
@@ -223,19 +217,19 @@ fn test_initialize_bundle_en_alias() {
         quiet: false,
     };
 
-    let bundle =
-        initialize_bundle(&args).expect("Should load eng resource when en alias is specified");
-    let message =
-        get_translation(&bundle, "generated_password", None).expect("Key should exist in eng.ftl");
+    let bundle = initialize_bundle(&args).map_err(|e| format!("bundle init failed: {e:?}"))?;
+    let message = get_translation(&bundle, "generated_password", None)
+        .map_err(|e| format!("translation failed: {e:?}"))?;
     assert!(
         message.contains("Password Generation Result"),
         "English translation should be returned for alias en"
     );
+    Ok(())
 }
 
 /// 新規テスト2: jpn翻訳でのエラーメッセージ比較
 #[test]
-fn test_jpn_translation_error_message() {
+fn test_jpn_translation_error_message() -> TestResult<()> {
     let args = RupassArgs {
         language: Some("jpn".to_string()),
         password_length: None,
@@ -257,19 +251,20 @@ fn test_jpn_translation_error_message() {
         quiet: false,
     };
 
-    let bundle = initialize_bundle(&args).expect("Failed to load jpn resource");
+    let bundle = initialize_bundle(&args).map_err(|e| format!("bundle init failed: {e:?}"))?;
     // jpn.ftl は "error_password_too_short" = "パスワードは15文字以上を推奨します。" など
     let too_short = get_translation(&bundle, "error_password_too_short", None)
-        .expect("Should find key in jpn.ftl");
+        .map_err(|e| format!("translation failed: {e:?}"))?;
     assert!(
         too_short.contains("パスワードは15文字以上を推奨します。"),
         "Japanese short password error message should match"
     );
+    Ok(())
 }
 
 /// 新規テスト3: 英語と日本語で同一キーを取得し、文言が異なることを確認する
 #[test]
-fn test_compare_eng_and_jpn_translations() {
+fn test_compare_eng_and_jpn_translations() -> TestResult<()> {
     let eng_args = RupassArgs {
         language: Some("eng".to_string()),
         password_length: None,
@@ -311,14 +306,16 @@ fn test_compare_eng_and_jpn_translations() {
         quiet: false,
     };
 
-    let eng_bundle = initialize_bundle(&eng_args).expect("Failed to load eng resource");
-    let jpn_bundle = initialize_bundle(&jpn_args).expect("Failed to load jpn resource");
+    let eng_bundle =
+        initialize_bundle(&eng_args).map_err(|e| format!("bundle init failed: {e:?}"))?;
+    let jpn_bundle =
+        initialize_bundle(&jpn_args).map_err(|e| format!("bundle init failed: {e:?}"))?;
 
     // 同じキー "error_no_charset_selected" を取得して比較
     let eng_text = get_translation(&eng_bundle, "error_no_charset_selected", None)
-        .expect("ENG translation not found");
+        .map_err(|e| format!("translation failed: {e:?}"))?;
     let jpn_text = get_translation(&jpn_bundle, "error_no_charset_selected", None)
-        .expect("JPN translation not found");
+        .map_err(|e| format!("translation failed: {e:?}"))?;
 
     assert_ne!(
         eng_text, jpn_text,
@@ -333,11 +330,12 @@ fn test_compare_eng_and_jpn_translations() {
         jpn_text.contains("エラー: 文字セットが選択されていません"),
         "Japanese error_no_charset_selected should contain the Japanese phrase"
     );
+    Ok(())
 }
 
 /// 言語が指定されない場合はデフォルトのengが読み込まれる
 #[test]
-fn test_default_language_is_eng() {
+fn test_default_language_is_eng() -> TestResult<()> {
     // 言語オプションがNoneの場合
     let args = RupassArgs {
         language: None,
@@ -359,14 +357,14 @@ fn test_default_language_is_eng() {
         show_strength: false,
         quiet: false,
     };
-    let bundle =
-        initialize_bundle(&args).expect("Should load default eng resource if none specified");
+    let bundle = initialize_bundle(&args).map_err(|e| format!("bundle init failed: {e:?}"))?;
 
     // eng.ftl にあるキーを確認
     let eng_text = get_translation(&bundle, "question_change_special_chars", None)
-        .expect("Should get an English message for invalid input key");
+        .map_err(|e| format!("translation failed: {e:?}"))?;
     assert!(
         eng_text.contains("Change the special characters used?"),
         "Default language (eng) message should contain 'Change the special characters used?'"
     );
+    Ok(())
 }
