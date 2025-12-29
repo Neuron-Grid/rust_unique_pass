@@ -209,17 +209,17 @@ pub async fn produce_secure_password(
         return Err(GenerationError::InvalidLength);
     }
 
-    let mut candidates = Vec::with_capacity(STRENGTH_CHECK_INTERVAL);
+    let mut candidates: Vec<Zeroizing<String>> = Vec::with_capacity(STRENGTH_CHECK_INTERVAL);
 
     for attempt in 1..=MAX_GENERATION_ATTEMPTS {
         if let Some(pwd) = assemble_random_password_sync(all_vec, len, req)? {
-            candidates.push(pwd);
+            candidates.push(Zeroizing::new(pwd));
 
             // 定期的にバッチで強度チェック - CPU効率改善
             if attempt % STRENGTH_CHECK_INTERVAL == 0 || attempt == MAX_GENERATION_ATTEMPTS {
                 for candidate in candidates.drain(..) {
                     if is_strong(&candidate) {
-                        return Ok(Zeroizing::new(candidate));
+                        return Ok(candidate);
                     }
                 }
             }
@@ -270,7 +270,7 @@ fn assemble_random_password_internal<S: ByteStream>(
         Some(rest) => rest,
         None => return Ok(None),
     };
-    let mut pwd: Vec<char> = need;
+    let mut pwd: Zeroizing<Vec<char>> = Zeroizing::new(need);
 
     for _ in 0..rest {
         let index = sampler.next_index(all_vec.len())?;
@@ -289,7 +289,9 @@ fn assemble_random_password_internal<S: ByteStream>(
         }
     }
 
-    Ok(Some(pwd.iter().collect()))
+    let out: String = pwd.iter().collect();
+    pwd.zeroize();
+    Ok(Some(out))
 }
 
 struct StreamingIndexSampler<S: ByteStream> {
@@ -342,11 +344,6 @@ impl<S: ByteStream> StreamingIndexSampler<S> {
 
         Ok(u64::from_le_bytes(word))
     }
-
-    #[cfg(test)]
-    fn into_stream(self) -> S {
-        self.stream
-    }
 }
 
 /// # Overview
@@ -375,173 +372,6 @@ fn is_strong(pwd: &str) -> bool {
     zxcvbn(pwd, &[]).score() == Score::Four
 }
 
-// テスト用補助: 外部RNG差し替えや決定性テストを可能にする
 #[cfg(test)]
-pub mod test_helpers {
-    use super::*;
-    use rand::RngCore;
-    use zeroize::{Zeroize, Zeroizing};
-
-    const TEST_STREAM_BLOCK_SIZE: usize = 256;
-
-    pub struct DeterministicOutcome {
-        pub password: String,
-        pub swap_count: usize,
-        pub bytes_consumed: usize,
-    }
-
-    struct DeterministicByteStream<'a, R: RngCore> {
-        rng: &'a mut R,
-        cache: Zeroizing<[u8; TEST_STREAM_BLOCK_SIZE]>,
-        cursor: usize,
-        available: usize,
-        bytes_consumed: usize,
-    }
-
-    impl<'a, R: RngCore> DeterministicByteStream<'a, R> {
-        fn new(rng: &'a mut R) -> Self {
-            Self {
-                rng,
-                cache: Zeroizing::new([0u8; TEST_STREAM_BLOCK_SIZE]),
-                cursor: 0,
-                available: 0,
-                bytes_consumed: 0,
-            }
-        }
-
-        fn bytes_consumed(&self) -> usize {
-            self.bytes_consumed
-        }
-    }
-
-    impl<R: RngCore> ByteStream for DeterministicByteStream<'_, R> {
-        fn fill_next_block(&mut self) -> Result<()> {
-            self.rng.fill_bytes(self.cache.as_mut());
-            self.cursor = 0;
-            self.available = self.cache.len();
-            Ok(())
-        }
-
-        fn remaining_bytes(&self) -> &[u8] {
-            let end = self
-                .cursor
-                .saturating_add(self.available)
-                .min(self.cache.len());
-            &self.cache[self.cursor..end]
-        }
-
-        fn consume(&mut self, n: usize) {
-            let take = n.min(self.available);
-            self.cursor = (self.cursor + take).min(self.cache.len());
-            self.available = self.available.saturating_sub(take);
-            self.bytes_consumed += take;
-            if self.available == 0 {
-                self.cursor = 0;
-            }
-        }
-    }
-
-    impl<R: RngCore> Drop for DeterministicByteStream<'_, R> {
-        fn drop(&mut self) {
-            self.cache.as_mut().zeroize();
-            self.cursor = 0;
-            self.available = 0;
-        }
-    }
-
-    pub fn assemble_random_password_with_rng(
-        rng: &mut impl RngCore,
-        all_vec: &[char],
-        len: usize,
-        req: &[Vec<char>],
-    ) -> Result<Option<DeterministicOutcome>> {
-        if all_vec.is_empty() {
-            return Ok(None);
-        }
-
-        let stream = DeterministicByteStream::new(rng);
-        let mut sampler = StreamingIndexSampler::new(stream);
-        let mut swaps = 0usize;
-        let password =
-            assemble_random_password_internal(&mut sampler, all_vec, len, req, Some(&mut swaps))?;
-        let stream = sampler.into_stream();
-
-        Ok(password.map(|password| DeterministicOutcome {
-            password,
-            swap_count: swaps,
-            bytes_consumed: stream.bytes_consumed(),
-        }))
-    }
-
-    /// テスト用: 時間依存を避け、決定論的に評価関数/乱数で検証
-    pub fn produce_password_within_time_test(
-        all_vec: &[char],
-        req: &[Vec<char>],
-        len: usize,
-        min_score: u8,
-        evaluator: &impl PasswordStrengthEvaluator,
-        rng: &mut impl RngCore,
-        max_attempts: u64,
-    ) -> Result<Option<(String, u8, f64, bool)>> {
-        // 時間制約は無視し、max_attempts まで探索
-        let mut attempts: u64 = 0;
-        let mut best_pwd: Option<String> = None;
-        let mut best_score: u8 = 0;
-        let mut best_bits: f64 = 0.0;
-
-        while attempts < max_attempts {
-            attempts += 1;
-            if let Some(outcome) = assemble_random_password_with_rng(rng, all_vec, len, req)? {
-                let candidate = outcome.password;
-                if candidate.chars().count() != len {
-                    continue;
-                }
-                if candidate.chars().count() < 8 {
-                    continue;
-                }
-                if candidate
-                    .chars()
-                    .all(|c| c == candidate.chars().next().unwrap_or('\0'))
-                {
-                    continue;
-                }
-                let (score, bits) = evaluator.score_entropy(&candidate);
-                if score >= min_score {
-                    return Ok(Some((candidate, score, bits, true)));
-                }
-                if score > best_score || (score == best_score && bits > best_bits) {
-                    best_score = score;
-                    best_bits = bits;
-                    best_pwd = Some(candidate);
-                }
-            }
-        }
-
-        Ok(best_pwd.map(|pwd| (pwd, best_score, best_bits, false)))
-    }
-
-    #[test]
-    fn fisher_yates_executes_all_swaps() {
-        use rand::SeedableRng;
-        use rand_chacha::ChaCha8Rng;
-
-        let all_vec: Vec<char> = (33u8..=126).map(char::from).collect();
-        let req = vec![
-            ('0'..='9').collect::<Vec<char>>(),
-            ('A'..='Z').collect::<Vec<char>>(),
-            ('a'..='z').collect::<Vec<char>>(),
-            vec!['!', '@', '#', '$', '%', '^'],
-        ];
-
-        let mut rng = ChaCha8Rng::from_seed([0x42; 32]);
-        let len = 32;
-
-        let outcome = assemble_random_password_with_rng(&mut rng, &all_vec, len, &req)
-            .expect("ランダムパスワード生成に失敗しました")
-            .expect("ランダムパスワード生成に失敗しました");
-
-        assert_eq!(outcome.password.chars().count(), len);
-        assert_eq!(outcome.swap_count, len.saturating_sub(1));
-        assert!(outcome.bytes_consumed >= outcome.swap_count * std::mem::size_of::<u64>(),);
-    }
-}
+#[path = "../../tests/unit/password_generation_tests.rs"]
+mod password_generation_tests;
