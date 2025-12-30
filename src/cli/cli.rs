@@ -3,7 +3,9 @@ use {crate::password::password_generation::MAX_TIMEOUT_MS, clap::Parser};
 /// # Overview
 /// コマンドライン引数を定義する構造体。
 /// `clap` クレートを使用して引数をパースします。
+
 #[derive(Parser, Debug, PartialEq)]
+#[command(about = "Command-line options for rupass.")]
 pub struct RupassArgs {
     // 設定言語を指定する
     #[clap(
@@ -12,7 +14,7 @@ pub struct RupassArgs {
         short_alias = 'L',
         value_name = "LANGUAGE",
         help = "Specifies the language for user prompts and messages.\
-            \nDefault: English (eng). ISO639-3 codes: eng (en), jpn (ja), deu (de)."
+            \nDefault: English. ISO639-3 codes: eng, jpn, deu."
     )]
     pub language: Option<String>,
 
