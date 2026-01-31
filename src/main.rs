@@ -17,6 +17,7 @@ use rust_unique_pass::{
     FlowReport, GenerationError, Result, StdioInterface, exit_code_for_error, fallback_translation,
     generate_password_flow_with_min_score, get_global_rng, initialize_bundle, parse_args,
 };
+use std::process::ExitCode;
 
 /// # Overview
 /// アプリケーションのエントリポイント。
@@ -25,25 +26,36 @@ use rust_unique_pass::{
 /// Tokioランタイムは current_thread を明示的に使用します。
 ///
 /// # Returns
-/// 処理が成功した場合、`Ok(())` を返します。
-///
-/// # Errors
-/// コマンドライン引数のパース、バンドルの初期化、またはパスワード生成フローの実行中に
-/// エラーが発生した場合、[`Result`] を返します。
+/// 処理結果に応じて [`ExitCode`] を返します。
 #[tokio::main(flavor = "current_thread")]
-async fn main() -> Result<()> {
+async fn main() -> ExitCode {
     let args = parse_args();
-    let bundle = initialize_bundle(&args)?;
+    let bundle = match initialize_bundle(&args) {
+        Ok(bundle) => bundle,
+        Err(e) => {
+            eprintln!("{e}");
+            return exit_code_from_i32(exit_code_for_error(&e));
+        }
+    };
     let mut ui = StdioInterface::default();
     let min_score = resolve_min_score(&args);
-    let global_rng = get_global_rng()?;
+    let global_rng = match get_global_rng() {
+        Ok(rng) => rng,
+        Err(e) => {
+            eprintln!("{e}");
+            return exit_code_from_i32(exit_code_for_error(&e));
+        }
+    };
     let mut rng_stream = global_rng.stream();
     match generate_password_flow_with_min_score(&mut ui, &bundle, &args, min_score, &mut rng_stream)
         .await
     {
         Ok(report) => {
-            render_report(&mut ui, report, &args).await?;
-            Ok(())
+            if let Err(e) = render_report(&mut ui, report, &args).await {
+                eprintln!("{e}");
+                return exit_code_from_i32(exit_code_for_error(&e));
+            }
+            ExitCode::SUCCESS
         }
         Err(e) => {
             // エラーコードのマッピング
@@ -85,7 +97,7 @@ async fn main() -> Result<()> {
             } else {
                 eprintln!("{e}");
             }
-            std::process::exit(code);
+            exit_code_from_i32(code)
         }
     }
 }
@@ -101,6 +113,16 @@ fn resolve_min_score(args: &rust_unique_pass::RupassArgs) -> u8 {
         min_score = value;
     }
     min_score
+}
+
+// 終了コードの範囲をu8へ正規化する
+fn exit_code_from_i32(code: i32) -> ExitCode {
+    let code_u8 = if (0..=u8::MAX as i32).contains(&code) {
+        code as u8
+    } else {
+        1
+    };
+    ExitCode::from(code_u8)
 }
 
 async fn render_report(
