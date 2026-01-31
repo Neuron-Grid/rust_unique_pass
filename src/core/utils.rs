@@ -77,26 +77,22 @@ where
     E: fmt::Display + 'static,
 {
     const MAX_INPUT_FAILURES: usize = 10;
-    let mut consecutive_failures = 0;
+    let mut state = PromptState::new();
 
     loop {
         let input = match ui.prompt(prompt).await {
             Ok(s) => {
-                consecutive_failures = 0; // Reset counter on success
+                state.reset();
                 s
             }
             Err(e) => {
-                consecutive_failures += 1;
-                let retry_msg = format!(
-                    "Failed to read input (attempt {consecutive_failures}/{MAX_INPUT_FAILURES}): {e}"
-                );
+                state.register_failure();
+                let retry_msg = state.retry_message(MAX_INPUT_FAILURES, &e);
 
                 if let Err(_e) = ui.print(&retry_msg).await {}
 
-                if consecutive_failures >= MAX_INPUT_FAILURES {
-                    return Err(GenerationError::InputFailure(format!(
-                        "Consecutive input errors exceeded maximum attempts ({MAX_INPUT_FAILURES}). Last error: {e}"
-                    )));
+                if state.reached_limit(MAX_INPUT_FAILURES) {
+                    return Err(state.input_failure_error(MAX_INPUT_FAILURES, &e));
                 }
                 continue;
             }
@@ -106,6 +102,42 @@ where
             Ok(v) => break Ok(v),
             Err(e) => on_err(ui, &e).await,
         }
+    }
+}
+
+/// 入力失敗の状態を保持する
+struct PromptState {
+    failures: usize,
+}
+
+impl PromptState {
+    fn new() -> Self {
+        Self { failures: 0 }
+    }
+
+    fn reset(&mut self) {
+        self.failures = 0;
+    }
+
+    fn register_failure(&mut self) {
+        self.failures = self.failures.saturating_add(1);
+    }
+
+    fn reached_limit(&self, max_limit: usize) -> bool {
+        self.failures >= max_limit
+    }
+
+    fn retry_message(&self, max_limit: usize, err: &dyn fmt::Display) -> String {
+        format!(
+            "Failed to read input (attempt {}/{max_limit}): {err}",
+            self.failures
+        )
+    }
+
+    fn input_failure_error(&self, max_limit: usize, err: &dyn fmt::Display) -> GenerationError {
+        GenerationError::InputFailure(format!(
+            "Consecutive input errors exceeded maximum attempts ({max_limit}). Last error: {err}"
+        ))
     }
 }
 

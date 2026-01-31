@@ -42,17 +42,15 @@ pub async fn assemble_character_set(
     args: &RupassArgs,
 ) -> Result<(String, Vec<String>)> {
     let (base, req) = assemble_flag_based_charset(args);
-    let (mut charset, mut req_sets) = if args.no_prompt {
-        (base, req)
-    } else {
+    let interactive = !args.no_prompt;
+    let (mut charset, mut req_sets) = if interactive {
         ask_user_for_additional_sets(ui, bundle, args, base, req).await?
+    } else {
+        (base, req)
     };
 
-    let special = if args.no_prompt {
-        handle_special_characters_no_prompt(args)
-    } else {
-        handle_special_characters(ui, bundle, args).await
-    }?;
+    let special_mode = resolve_special_chars_mode(args, interactive);
+    let special = resolve_special_characters(ui, bundle, special_mode).await?;
     if !special.is_empty() {
         charset.push_str(&special);
         req_sets.push(special);
@@ -71,6 +69,55 @@ pub async fn assemble_character_set(
         .collect();
 
     Ok((charset, req_sets))
+}
+
+/// 特殊文字の選択モード
+enum SpecialCharsMode<'a> {
+    Skip,
+    UseDefault,
+    UseCustom(&'a str),
+    AskUser,
+}
+
+/// # Overview
+/// 対話可否とフラグから特殊文字の選択モードを決定します。
+fn resolve_special_chars_mode(args: &RupassArgs, interactive: bool) -> SpecialCharsMode<'_> {
+    if args.no_symbols {
+        return SpecialCharsMode::Skip;
+    }
+
+    if args.all {
+        return SpecialCharsMode::UseDefault;
+    }
+
+    if let Some(custom) = args.symbols_set.as_ref() {
+        return SpecialCharsMode::UseCustom(custom.as_str());
+    }
+
+    if args.symbols {
+        return SpecialCharsMode::UseDefault;
+    }
+
+    if interactive {
+        SpecialCharsMode::AskUser
+    } else {
+        SpecialCharsMode::Skip
+    }
+}
+
+/// # Overview
+/// 決定済みのモードに従って特殊文字セットを確定します。
+async fn resolve_special_characters(
+    ui: &mut dyn UserInterface,
+    bundle: &FluentBundle<FluentResource>,
+    mode: SpecialCharsMode<'_>,
+) -> Result<String> {
+    match mode {
+        SpecialCharsMode::Skip => Ok(String::new()),
+        SpecialCharsMode::UseDefault => Ok(DEFAULT_SPECIAL_CHARS.to_owned()),
+        SpecialCharsMode::UseCustom(custom) => Ok(custom.to_owned()),
+        SpecialCharsMode::AskUser => prompt_special_characters(ui, bundle).await,
+    }
 }
 
 /// # Overview
@@ -182,41 +229,11 @@ async fn ask_user_for_additional_sets(
 }
 
 /// # Overview
-/// 特殊文字を文字セットに含めるかどうかを処理します。
-/// コマンドラインフラグで指定されている場合はデフォルトの特殊文字を使用し、
-/// そうでない場合はユーザーに確認します。
-///
-/// # Arguments
-/// * `ui`: ユーザーとの対話に使用する [`UserInterface`] トレイトオブジェクト。
-/// * `bundle`: 国際化対応に使用する [`FluentBundle`] オブジェクト。
-/// * `args`: コマンドライン引数を格納した [`RupassArgs`] 構造体。
-///
-/// # Returns
-/// 使用する特殊文字の文字列を返します。特殊文字を使用しない場合は空文字列を返します。
-///
-/// # Errors
-/// ユーザー入力の処理中にエラーが発生した場合、[`GenerationError`] を含む [`Result`] を返します。
-async fn handle_special_characters(
+/// ユーザーに特殊文字の利用可否を確認し、必要に応じて入力を受け取ります。
+async fn prompt_special_characters(
     ui: &mut dyn UserInterface,
     bundle: &FluentBundle<FluentResource>,
-    args: &RupassArgs,
 ) -> Result<String> {
-    if args.no_symbols {
-        return Ok(String::new());
-    }
-
-    if args.all {
-        return Ok(DEFAULT_SPECIAL_CHARS.to_owned());
-    }
-
-    if let Some(custom) = args.symbols_set.as_ref() {
-        return Ok(custom.clone());
-    }
-
-    if args.symbols {
-        return Ok(DEFAULT_SPECIAL_CHARS.to_owned());
-    }
-
     let mut fargs = FluentArgs::new();
     fargs.set("specialChars", DEFAULT_SPECIAL_CHARS);
 
@@ -239,27 +256,6 @@ async fn handle_special_characters(
     } else {
         Ok(String::new())
     }
-}
-
-// 非対話モード用: yes/no を尋ねずに決定する
-fn handle_special_characters_no_prompt(args: &RupassArgs) -> Result<String> {
-    if args.no_symbols {
-        return Ok(String::new());
-    }
-
-    if args.all {
-        return Ok(DEFAULT_SPECIAL_CHARS.to_owned());
-    }
-
-    if let Some(custom) = args.symbols_set.as_ref() {
-        return Ok(custom.clone());
-    }
-
-    if args.symbols || args.all {
-        return Ok(DEFAULT_SPECIAL_CHARS.to_owned());
-    }
-
-    Ok(String::new())
 }
 
 /// # Overview

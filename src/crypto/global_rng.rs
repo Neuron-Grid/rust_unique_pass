@@ -103,7 +103,12 @@ impl GlobalRng {
         let last_reseed = self.last_reseed.load(Ordering::Relaxed);
 
         let elapsed = current_time.saturating_sub(last_reseed);
-        Ok(output_count >= self.reseed_threshold || elapsed >= Self::RESEED_TIME_THRESHOLD)
+        Ok(should_reseed_by(
+            output_count,
+            elapsed,
+            self.reseed_threshold,
+            Self::RESEED_TIME_THRESHOLD,
+        ))
     }
 
     fn reseed(&self) -> AppResult<()> {
@@ -234,4 +239,14 @@ pub fn get_global_rng() -> AppResult<Arc<GlobalRng>> {
     let rng = Arc::new(GlobalRng::new()?);
     *guard = Some(rng.clone());
     Ok(rng)
+}
+
+/// 再シード要否の判定を純関数で行う
+fn should_reseed_by(
+    output_bytes: u64,
+    elapsed_secs: u64,
+    bytes_threshold: u64,
+    time_threshold: u64,
+) -> bool {
+    output_bytes >= bytes_threshold || elapsed_secs >= time_threshold
 }

@@ -23,6 +23,8 @@ mod core;
 mod crypto;
 mod password;
 
+/// CLI 出力の組み立てとエラーフォーマットを提供します。
+pub use cli::{ReportOutput, build_report_output, format_generation_error, run_cli};
 /// コマンドライン引数の解析に関連する機能を提供します。
 pub use cli::{RupassArgs, parse_args};
 /// 標準入出力によるユーザーインターフェースを提供します。
@@ -42,7 +44,7 @@ pub use crypto::{MAX_PASSWORD_BYTES, MAX_PASSWORD_CHARS, zxcvbn_entropy_score};
 pub use crypto::{MemoryProtection, SecureString, TimingSafeOps, get_global_rng};
 /// パスワード生成の主要なフローを処理します。
 pub use password::{
-    FlowReport, PasswordStrengthEvaluator, generate_password_flow,
+    FlowReport, PasswordStrengthEvaluator, Warning, generate_password_flow,
     generate_password_flow_with_evaluator, generate_password_flow_with_min_score,
     produce_secure_password, validate_password_length,
 };

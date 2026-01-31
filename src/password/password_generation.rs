@@ -40,6 +40,12 @@ pub(crate) struct GenerationOutcome {
     pub reached_target: bool,
 }
 
+/// 候補スコア情報
+struct CandidateScore {
+    score: u8,
+    entropy_bits: f64,
+}
+
 /// 強度評価抽象化トレイト
 pub trait PasswordStrengthEvaluator {
     fn score_entropy(&self, pwd: &str) -> Result<(u8, f64)>;
@@ -91,6 +97,33 @@ fn analyze_candidate(candidate: &str) -> CandidateAnalysis {
     }
 }
 
+/// 候補の基本検証と強度評価を行う
+fn evaluate_candidate(
+    candidate: &str,
+    config: &StrengthSearchConfig<'_>,
+    evaluator: &dyn PasswordStrengthEvaluator,
+) -> Result<Option<CandidateScore>> {
+    let analysis = analyze_candidate(candidate);
+    if analysis.char_len != config.len {
+        return Ok(None);
+    }
+    if analysis.char_len < MIN_PASSWORD_CHARS {
+        return Ok(None);
+    }
+    if analysis.byte_len > crate::crypto::zxcvbn_wrapper::MAX_PASSWORD_BYTES {
+        return Ok(None);
+    }
+    if analysis.all_same {
+        return Ok(None);
+    }
+
+    let (score, bits) = evaluator.score_entropy(candidate)?;
+    Ok(Some(CandidateScore {
+        score,
+        entropy_bits: bits,
+    }))
+}
+
 /// 時刻依存を分離するためのクロック抽象化
 trait Clock {
     fn now(&self) -> Duration;
@@ -123,6 +156,33 @@ struct StrengthSearchConfig<'a> {
     timeout_ms: u64,
     min_score: u8,
     strict: bool,
+}
+
+/// ベスト候補の保持
+struct BestCandidate {
+    password: Option<Zeroizing<String>>,
+    score: u8,
+    entropy_bits: f64,
+}
+
+impl BestCandidate {
+    fn new() -> Self {
+        Self {
+            password: None,
+            score: 0,
+            entropy_bits: 0.0,
+        }
+    }
+
+    fn update(&mut self, candidate: &Zeroizing<String>, scored: &CandidateScore) {
+        if scored.score > self.score
+            || (scored.score == self.score && scored.entropy_bits > self.entropy_bits)
+        {
+            self.score = scored.score;
+            self.entropy_bits = scored.entropy_bits;
+            self.password = Some(Zeroizing::new(candidate.as_str().to_owned()));
+        }
+    }
 }
 
 fn assemble_random_password_with_sampler<S: ByteStream>(
@@ -158,62 +218,28 @@ fn produce_password_within_time_sync_with_sampler_and_clock<S: ByteStream, C: Cl
         .checked_add(Duration::from_millis(config.timeout_ms))
         .ok_or(GenerationError::InvalidTimeout)?;
     let mut attempts: u64 = 0;
-    let mut best_pwd: Option<Zeroizing<String>> = None;
-    let mut best_score: u8 = 0;
-    let mut best_bits: f64 = 0.0;
+    let mut best = BestCandidate::new();
 
     loop {
         attempts += 1;
 
-        if let Some(mut candidate) =
+        if let Some(candidate) =
             assemble_random_password_with_sampler(sampler, config.all_vec, config.len, config.req)?
         {
-            let analysis = analyze_candidate(&candidate);
-            if analysis.char_len != config.len {
-                candidate.zeroize();
-                continue;
-            }
-            // 軽量フィルタ: ごく弱い候補をスキップ
-            if analysis.char_len < MIN_PASSWORD_CHARS {
-                candidate.zeroize();
-                continue;
-            }
-            if analysis.byte_len > crate::crypto::zxcvbn_wrapper::MAX_PASSWORD_BYTES {
-                candidate.zeroize();
-                continue;
-            }
-            if analysis.all_same {
-                // 全て同一文字
-                candidate.zeroize();
-                continue;
-            }
+            let candidate = Zeroizing::new(candidate);
+            let scored = evaluate_candidate(candidate.as_str(), config, evaluator)?;
 
-            let (score, bits) = match evaluator.score_entropy(&candidate) {
-                Ok(value) => value,
-                Err(err) => {
-                    candidate.zeroize();
-                    return Err(err);
+            if let Some(scored) = scored {
+                best.update(&candidate, &scored);
+                if scored.score >= config.min_score {
+                    return Ok(GenerationOutcome {
+                        password: candidate,
+                        score: scored.score,
+                        entropy_bits: scored.entropy_bits,
+                        reached_target: true,
+                    });
                 }
-            };
-
-            // ベスト更新ルール: スコア優先、同点ならエントロピー優先
-            if score > best_score || (score == best_score && bits > best_bits) {
-                best_score = score;
-                best_bits = bits;
-                best_pwd = Some(Zeroizing::new(candidate.clone()));
             }
-
-            if score >= config.min_score {
-                let pwd = Zeroizing::new(candidate);
-                return Ok(GenerationOutcome {
-                    password: pwd,
-                    score,
-                    entropy_bits: bits,
-                    reached_target: true,
-                });
-            }
-
-            candidate.zeroize();
         }
 
         // 時間チェック（間引き）
@@ -224,14 +250,14 @@ fn produce_password_within_time_sync_with_sampler_and_clock<S: ByteStream, C: Cl
     }
 
     // 期限切れ/回数到達
-    if let Some(pwd) = best_pwd {
-        if config.strict && best_score < config.min_score {
+    if let Some(pwd) = best.password {
+        if config.strict && best.score < config.min_score {
             return Err(GenerationError::StrictTargetUnmet);
         }
         return Ok(GenerationOutcome {
             password: pwd,
-            score: best_score,
-            entropy_bits: best_bits,
+            score: best.score,
+            entropy_bits: best.entropy_bits,
             reached_target: false,
         });
     }

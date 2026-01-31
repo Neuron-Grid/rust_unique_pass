@@ -15,42 +15,14 @@ limitations under the License. */
 use crate::cli::RupassArgs;
 use crate::cli::UserInterface;
 use crate::core::app_errors::Result;
-use crate::core::utils::fallback_translation;
 use crate::crypto::global_rng::ByteStream;
 use crate::password::character_set::assemble_character_set;
 use crate::password::password_generation::{
     GenerationOutcome, PasswordStrengthEvaluator, ZxcvbnEvaluator, produce_password_within_time,
 };
 use crate::password::password_length::get_password_length;
+use crate::password::reporting::{FlowReport, build_header, build_strength_line, build_warnings};
 use fluent::{FluentBundle, FluentResource};
-use std::fmt;
-use zeroize::Zeroizing;
-
-/// パスワード生成結果レポート
-pub struct FlowReport {
-    pub password: Zeroizing<String>,
-    pub header: Option<String>,
-    pub strength_line: Option<String>,
-    pub warnings: Vec<String>,
-    pub reached_target: bool,
-    pub score: u8,
-    pub entropy_bits: f64,
-    pub show_blank_line: bool,
-}
-
-impl fmt::Debug for FlowReport {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("FlowReport")
-            .field("header", &self.header)
-            .field("strength_line", &self.strength_line)
-            .field("warnings", &self.warnings)
-            .field("reached_target", &self.reached_target)
-            .field("score", &self.score)
-            .field("entropy_bits", &self.entropy_bits)
-            .field("show_blank_line", &self.show_blank_line)
-            .finish()
-    }
-}
 
 #[doc(alias = "generate")]
 /// # Overview
@@ -136,20 +108,11 @@ async fn generate_password_flow_internal(
     evaluator: &dyn PasswordStrengthEvaluator,
     rng: &mut impl ByteStream,
 ) -> Result<FlowReport> {
-    let mut warnings: Vec<String> = Vec::new();
     let length = get_password_length(ui, bundle, args).await?;
     let (all_chars, req_sets) = assemble_character_set(ui, bundle, args).await?;
 
     let all_vec: Vec<char> = all_chars.chars().collect();
     let req_vec: Vec<Vec<char>> = req_sets.iter().map(|s| s.chars().collect()).collect();
-
-    // min-score が 0/1 の場合は弱さを警告（stderr）。quiet時は抑制
-    if (min_score == 0 || min_score == 1) && !args.quiet {
-        warnings.push(format!(
-            "Warning: very weak target score {} requested (0/1)",
-            min_score
-        ));
-    }
 
     let outcome = produce_password_within_time(
         rng,
@@ -171,53 +134,9 @@ async fn generate_password_flow_internal(
         reached_target,
     } = outcome;
 
-    let header = if args.quiet {
-        None
-    } else {
-        Some(fallback_translation(
-            bundle,
-            "generated_password",
-            "Generated password:",
-            None,
-        ))
-    };
-
-    let strength_line = if !args.quiet && args.show_strength {
-        use fluent::FluentArgs;
-        let mut fargs = FluentArgs::new();
-        fargs.set("score", score as i64);
-        let entropy_str = format!("{:.1}", entropy_bits);
-        fargs.set("entropyBits", entropy_str.as_str());
-        Some(crate::core::utils::fallback_translation(
-            bundle,
-            "info_strength_line",
-            &format!("Strength: {}/4 (entropy: {:.1} bits)", score, entropy_bits),
-            Some(&fargs),
-        ))
-    } else {
-        None
-    };
-
-    // 目標未達かつ非strictの場合のみ警告（stderr）
-    if !reached_target && !args.strict && !args.quiet {
-        use fluent::FluentArgs;
-        let mut wargs = FluentArgs::new();
-        wargs.set("targetScore", min_score as i64);
-        wargs.set("budgetMs", args.timeout_ms as i64);
-        wargs.set("bestScore", score as i64);
-        let entropy_str = format!("{:.1}", entropy_bits);
-        wargs.set("entropyBits", entropy_str.as_str());
-        let warn_msg = crate::core::utils::fallback_translation(
-            bundle,
-            "warning_best_effort_used",
-            &format!(
-                "Warning: Could not reach target score {} within {} ms. Using best candidate: score {} ({} bits).",
-                min_score, args.timeout_ms, score, entropy_str
-            ),
-            Some(&wargs),
-        );
-        warnings.push(warn_msg);
-    }
+    let header = build_header(bundle, args);
+    let strength_line = build_strength_line(bundle, args, score, entropy_bits);
+    let warnings = build_warnings(args, min_score, reached_target, score, entropy_bits);
 
     Ok(FlowReport {
         password,

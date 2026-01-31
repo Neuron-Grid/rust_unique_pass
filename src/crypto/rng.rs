@@ -41,9 +41,11 @@ pub struct SecureRng {
 }
 
 impl SecureRng {
-    const DEFAULT_RESEED_BYTES: u64 = 1_048_576; // 1MB
+    // 1MB
+    const DEFAULT_RESEED_BYTES: u64 = 1_048_576;
     const DEFAULT_RESEED_REQUESTS: u64 = 10_000;
-    const DEFAULT_RESEED_TIME: u64 = 3600; // 1時間
+    // 1時間
+    const DEFAULT_RESEED_TIME: u64 = 3600;
 
     /// 新しいSecureRngインスタンスを作成
     /// # セキュリティ
@@ -103,9 +105,14 @@ impl SecureRng {
         let last_reseed = self.last_reseed_time.load(Ordering::Relaxed);
 
         let elapsed = current_time.saturating_sub(last_reseed);
-        Ok(output_bytes >= self.reseed_threshold_bytes
-            || requests >= self.reseed_threshold_requests
-            || elapsed >= self.reseed_threshold_time)
+        Ok(should_auto_reseed_by(
+            output_bytes,
+            requests,
+            elapsed,
+            self.reseed_threshold_bytes,
+            self.reseed_threshold_requests,
+            self.reseed_threshold_time,
+        ))
     }
 
     /// 再シード
@@ -146,4 +153,18 @@ pub struct RngStatistics {
     pub output_bytes: u64,
     pub requests: u64,
     pub last_reseed: u64,
+}
+
+/// 再シード要否の判定を純関数で行う
+fn should_auto_reseed_by(
+    output_bytes: u64,
+    requests: u64,
+    elapsed_secs: u64,
+    bytes_threshold: u64,
+    request_threshold: u64,
+    time_threshold: u64,
+) -> bool {
+    output_bytes >= bytes_threshold
+        || requests >= request_threshold
+        || elapsed_secs >= time_threshold
 }
