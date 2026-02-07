@@ -54,6 +54,32 @@ fn test_secure_random_index() -> TestResult<()> {
 }
 
 #[test]
+fn test_secure_random_index_boundary_values() -> TestResult<()> {
+    let mut rng = ChaCha8Rng::from_seed([0x46; 32]);
+    let bounds = [
+        1usize, 2, 3, 4, 5, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65, 127, 128, 129,
+    ];
+
+    for max in bounds {
+        for _ in 0..512 {
+            let index = TimingSafeOps::secure_random_index(&mut rng, max)
+                .map_err(|e| format!("secure_random_index failed: {e}"))?;
+            assert!(index < max);
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_secure_random_index_zero_max_returns_zero() -> TestResult<()> {
+    let mut rng = ChaCha8Rng::from_seed([0x47; 32]);
+    let index = TimingSafeOps::secure_random_index(&mut rng, 0)
+        .map_err(|e| format!("secure_random_index failed: {e}"))?;
+    assert_eq!(index, 0);
+    Ok(())
+}
+
+#[test]
 fn test_secure_shuffle() -> TestResult<()> {
     let mut items = vec![1, 2, 3, 4, 5];
     let original = items.clone();

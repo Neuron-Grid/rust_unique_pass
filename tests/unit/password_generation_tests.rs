@@ -1,5 +1,7 @@
 use super::*;
 use rand::RngCore;
+use std::cell::Cell;
+use std::time::Duration;
 use zeroize::{Zeroize, Zeroizing};
 
 const TEST_STREAM_BLOCK_SIZE: usize = 256;
@@ -69,6 +71,87 @@ impl<R: RngCore> Drop for DeterministicByteStream<'_, R> {
     }
 }
 
+struct SequenceClock {
+    timeline: Vec<Duration>,
+    cursor: Cell<usize>,
+}
+
+impl SequenceClock {
+    fn new(timeline: Vec<Duration>) -> Self {
+        Self {
+            timeline,
+            cursor: Cell::new(0),
+        }
+    }
+}
+
+impl Clock for SequenceClock {
+    fn now(&self) -> Duration {
+        let index = self.cursor.get();
+        self.cursor.set(index.saturating_add(1));
+        match self.timeline.get(index).copied() {
+            Some(t) => t,
+            None => self.timeline.last().copied().unwrap_or(Duration::ZERO),
+        }
+    }
+}
+
+struct SequenceEvaluator {
+    sequence: Vec<(u8, f64)>,
+    calls: Cell<usize>,
+}
+
+impl SequenceEvaluator {
+    fn new(sequence: Vec<(u8, f64)>) -> Self {
+        Self {
+            sequence,
+            calls: Cell::new(0),
+        }
+    }
+
+    fn call_count(&self) -> usize {
+        self.calls.get()
+    }
+}
+
+impl PasswordStrengthEvaluator for SequenceEvaluator {
+    fn score_entropy(&self, _pwd: &str) -> Result<(u8, f64)> {
+        let index = self.calls.get();
+        self.calls.set(index.saturating_add(1));
+        let pos = index.min(self.sequence.len().saturating_sub(1));
+        Ok(self.sequence.get(pos).copied().unwrap_or((0, 0.0)))
+    }
+}
+
+fn run_strength_search_with_clock(
+    rng: &mut impl RngCore,
+    clock: &impl Clock,
+    evaluator: &dyn PasswordStrengthEvaluator,
+    timeout_ms: u64,
+    min_score: u8,
+    strict: bool,
+) -> Result<GenerationOutcome> {
+    let stream = DeterministicByteStream::new(rng);
+    let mut sampler = StreamingIndexSampler::new(stream);
+    let all_vec: Vec<char> = "AbCdef0123456789!@#$".chars().collect();
+    let req = vec![vec!['A'], vec!['b']];
+    let config = StrengthSearchConfig {
+        all_vec: &all_vec,
+        req: &req,
+        len: 15,
+        timeout_ms,
+        min_score,
+        strict,
+    };
+
+    produce_password_within_time_sync_with_sampler_and_clock(
+        &mut sampler,
+        &config,
+        evaluator,
+        clock,
+    )
+}
+
 fn assemble_random_password_with_rng(
     rng: &mut impl RngCore,
     all_vec: &[char],
@@ -116,5 +199,65 @@ fn fisher_yates_executes_all_swaps() -> std::result::Result<(), String> {
     assert_eq!(outcome.password.chars().count(), len);
     assert_eq!(outcome.swap_count, len.saturating_sub(1));
     assert!(outcome.bytes_consumed >= outcome.swap_count * std::mem::size_of::<u64>());
+    Ok(())
+}
+
+#[test]
+fn timeout_budget_limits_evaluator_invocations() -> std::result::Result<(), String> {
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha8Rng;
+
+    let mut rng = ChaCha8Rng::from_seed([0x43; 32]);
+    let evaluator = SequenceEvaluator::new(vec![(0, 12.0)]);
+    let clock = SequenceClock::new(vec![Duration::from_millis(0), Duration::from_millis(1)]);
+
+    let outcome = run_strength_search_with_clock(&mut rng, &clock, &evaluator, 0, 4, false)
+        .map_err(|e| format!("search failed: {e}"))?;
+
+    assert_eq!(evaluator.call_count(), 1);
+    assert_eq!(outcome.score, 0);
+    assert!(!outcome.reached_target);
+    Ok(())
+}
+
+#[test]
+fn strict_mode_keeps_contract_when_budget_expires() -> std::result::Result<(), String> {
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha8Rng;
+
+    let mut rng = ChaCha8Rng::from_seed([0x44; 32]);
+    let evaluator = SequenceEvaluator::new(vec![(0, 8.0)]);
+    let clock = SequenceClock::new(vec![Duration::from_millis(0), Duration::from_millis(1)]);
+
+    let result = run_strength_search_with_clock(&mut rng, &clock, &evaluator, 0, 4, true);
+    assert_eq!(evaluator.call_count(), 1);
+    match result {
+        Err(GenerationError::StrictTargetUnmet) => Ok(()),
+        Err(other) => Err(format!("unexpected error: {other}")),
+        Ok(_) => Err("strict mode should fail when target is unmet".to_string()),
+    }
+}
+
+#[test]
+fn best_candidate_prefers_higher_entropy_on_same_score() -> std::result::Result<(), String> {
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha8Rng;
+
+    let mut rng = ChaCha8Rng::from_seed([0x45; 32]);
+    let evaluator = SequenceEvaluator::new(vec![(2, 10.0), (2, 40.0)]);
+    let clock = SequenceClock::new(vec![
+        Duration::from_millis(0),
+        Duration::from_millis(0),
+        Duration::from_millis(0),
+        Duration::from_millis(1),
+    ]);
+
+    let outcome = run_strength_search_with_clock(&mut rng, &clock, &evaluator, 1, 4, false)
+        .map_err(|e| format!("search failed: {e}"))?;
+
+    assert_eq!(evaluator.call_count(), 2);
+    assert_eq!(outcome.score, 2);
+    assert!((outcome.entropy_bits - 40.0).abs() < 0.0001);
+    assert!(!outcome.reached_target);
     Ok(())
 }

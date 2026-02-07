@@ -28,8 +28,6 @@ const MAX_GENERATION_ATTEMPTS: usize = 500000;
 const STRENGTH_CHECK_INTERVAL: usize = 10;
 pub const MAX_TIMEOUT_MS: u64 = 3_600_000;
 
-/// N回に1回だけ`Instant::now()`を評価するための間引き係数
-const NOW_CHECK_INTERVAL: u64 = 32;
 const MIN_PASSWORD_CHARS: usize = 8;
 
 /// 時間予算による生成結果
@@ -174,14 +172,15 @@ impl BestCandidate {
         }
     }
 
-    fn update(&mut self, candidate: &Zeroizing<String>, scored: &CandidateScore) {
-        if scored.score > self.score
+    fn should_replace(&self, scored: &CandidateScore) -> bool {
+        scored.score > self.score
             || (scored.score == self.score && scored.entropy_bits > self.entropy_bits)
-        {
-            self.score = scored.score;
-            self.entropy_bits = scored.entropy_bits;
-            self.password = Some(Zeroizing::new(candidate.as_str().to_owned()));
-        }
+    }
+
+    fn update(&mut self, candidate: Zeroizing<String>, scored: &CandidateScore) {
+        self.score = scored.score;
+        self.entropy_bits = scored.entropy_bits;
+        self.password = Some(candidate);
     }
 }
 
@@ -221,7 +220,11 @@ fn produce_password_within_time_sync_with_sampler_and_clock<S: ByteStream, C: Cl
     let mut best = BestCandidate::new();
 
     loop {
-        attempts += 1;
+        // 最低1回は候補生成を試しつつ、2回目以降は期限を超えたら即終了する。
+        if attempts > 0 && clock.now() >= deadline {
+            break;
+        }
+        attempts = attempts.saturating_add(1);
 
         if let Some(candidate) =
             assemble_random_password_with_sampler(sampler, config.all_vec, config.len, config.req)?
@@ -230,7 +233,6 @@ fn produce_password_within_time_sync_with_sampler_and_clock<S: ByteStream, C: Cl
             let scored = evaluate_candidate(candidate.as_str(), config, evaluator)?;
 
             if let Some(scored) = scored {
-                best.update(&candidate, &scored);
                 if scored.score >= config.min_score {
                     return Ok(GenerationOutcome {
                         password: candidate,
@@ -239,12 +241,14 @@ fn produce_password_within_time_sync_with_sampler_and_clock<S: ByteStream, C: Cl
                         reached_target: true,
                     });
                 }
+                if best.should_replace(&scored) {
+                    best.update(candidate, &scored);
+                }
             }
         }
 
-        // 時間チェック（間引き）
-        #[allow(clippy::manual_is_multiple_of)] // modulus-based check keeps MSRV compatibility
-        if attempts % NOW_CHECK_INTERVAL == 0 && clock.now() >= deadline {
+        // 試行後にも期限を確認し、超過を1試行分に限定する。
+        if clock.now() >= deadline {
             break;
         }
     }

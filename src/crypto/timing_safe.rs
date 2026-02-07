@@ -24,7 +24,6 @@ limitations under the License. */
 ///
 use crate::core::app_errors::{GenerationError, Result};
 use rand::{CryptoRng, RngCore, TryRngCore};
-use std::sync::atomic::{AtomicU64, Ordering};
 use subtle::{Choice, ConstantTimeEq};
 
 /// タイミング攻撃対策を施したセキュア操作
@@ -114,25 +113,22 @@ impl TimingSafeOps {
     ///
     /// # 注意
     /// この処理は「定時間保証」を提供しません。
-    /// 実行時間のばらつきを増やすための近似的な手法です。
+    /// 互換目的で残す軽量な処理であり、可変遅延は導入しません。
     pub fn add_timing_noise() {
-        static COUNTER: AtomicU64 = AtomicU64::new(0);
-
-        // 可変遅延の追加
-        let delay = COUNTER.fetch_add(1, Ordering::Relaxed) % 1000;
-        let mut dummy = 1u64;
-
-        for _ in 0..delay {
-            dummy = dummy.wrapping_mul(dummy).wrapping_add(1);
+        let mut dummy = 0u64;
+        for _ in 0..4 {
+            dummy = dummy
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             // 最適化防止
-            std::hint::black_box(&dummy);
+            std::hint::black_box(dummy);
         }
     }
 
     /// セキュアなインデックス生成
     ///
     /// # セキュリティ
-    /// - 固定回数の試行で定時間性を重視しつつ、失敗時は一様性を優先するハイブリッド方式
+    /// - 固定回数の試行で候補を探索し、失敗時は一様性を優先するハイブリッド方式
     /// - ハイブリッドで候補が得られない場合はリジェクションサンプリングでバイアス排除を優先
     /// - 定時間性は近似であり、厳密保証ではない
     ///
@@ -164,7 +160,6 @@ impl TimingSafeOps {
             let choose_mask = (take as usize).wrapping_neg();
             selected = (selected & !choose_mask) | (candidate & choose_mask);
             selected_flag |= valid;
-            Self::add_timing_noise();
         }
 
         if selected_flag == 1 {
@@ -178,7 +173,6 @@ impl TimingSafeOps {
             if candidate < max {
                 return Ok(candidate);
             }
-            Self::add_timing_noise();
         }
     }
 
@@ -222,10 +216,9 @@ impl TimingSafeOps {
     /// セキュアなシャッフル
     ///
     /// # セキュリティ
-    /// - Fisher-Yatesアルゴリズムを用い、定時間性に配慮したインデックス選択を行う
-    /// - 各swap操作ごとにタイミングノイズを挿入
+    /// - Fisher-Yatesアルゴリズムを用い、バイアスを抑えたインデックス選択を行う
     /// - 定時間性は近似であり、必要に応じて一様性を優先
-    pub fn secure_shuffle<T: Clone, R>(items: &mut [T], rng: &mut R) -> Result<()>
+    pub fn secure_shuffle<T, R>(items: &mut [T], rng: &mut R) -> Result<()>
     where
         R: RngCore + CryptoRng + ?Sized,
     {
@@ -235,9 +228,6 @@ impl TimingSafeOps {
             // セキュアなインデックス生成
             let j = TimingSafeOps::secure_random_index(rng, i + 1)?;
             items.swap(i, j);
-
-            // タイミングノイズ
-            TimingSafeOps::add_timing_noise();
         }
 
         Ok(())
