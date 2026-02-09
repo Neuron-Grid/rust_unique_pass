@@ -240,17 +240,34 @@ pub fn format_generation_error(
     user_error.to_message(bundle)
 }
 
-// debug ビルド時のみ、テスト用に min_score を上書きする。
-// 環境変数: RUPASS_TEST_MIN_SCORE (u8)
+// 本番経路では、常にCLI引数の値を使用する。
+#[cfg(not(test))]
 fn resolve_min_score(args: &RupassArgs) -> u8 {
-    let mut min_score = args.min_score;
-    if cfg!(debug_assertions)
-        && let Ok(raw) = std::env::var("RUPASS_TEST_MIN_SCORE")
-        && let Ok(value) = raw.trim().parse::<u8>()
-    {
-        min_score = value;
+    args.min_score
+}
+
+// テスト時のみ、環境変数による上書きを許可する。
+#[cfg(test)]
+fn resolve_min_score(args: &RupassArgs) -> u8 {
+    let override_raw = std::env::var("RUPASS_TEST_MIN_SCORE").ok();
+    resolve_min_score_from_override(args, override_raw.as_deref())
+}
+
+#[cfg(test)]
+fn resolve_min_score_from_override(args: &RupassArgs, override_raw: Option<&str>) -> u8 {
+    match override_raw.and_then(parse_test_min_score_override) {
+        Some(score) => score,
+        None => args.min_score,
     }
-    min_score
+}
+
+#[cfg(test)]
+fn parse_test_min_score_override(raw: &str) -> Option<u8> {
+    let parsed = match raw.trim().parse::<u8>() {
+        Ok(value) => value,
+        Err(_) => return None,
+    };
+    if parsed <= 4 { Some(parsed) } else { None }
 }
 
 // 終了コードの範囲をu8へ正規化する
@@ -262,3 +279,7 @@ fn exit_code_from_i32(code: i32) -> ExitCode {
     };
     ExitCode::from(code_u8)
 }
+
+#[cfg(test)]
+#[path = "../../tests/unit/reporting_tests.rs"]
+mod reporting_tests;

@@ -24,10 +24,8 @@ limitations under the License. */
 /// - エラー時は詳細な情報を返却
 ///
 use super::{CryptoError, CryptoResult};
-use std::alloc::{Layout, alloc, dealloc};
+use std::alloc::Layout;
 use std::io;
-use std::mem::ManuallyDrop;
-use std::ptr::{self, NonNull};
 use subtle::{Choice, ConstantTimeEq};
 use zeroize::Zeroize;
 
@@ -46,6 +44,10 @@ impl MemoryProtector {
         {
             let ptr = buffer.as_mut_ptr() as *mut libc::c_void;
             let len = buffer.len();
+            // SAFETY:
+            // - `ptr` は `buffer` の有効な先頭ポインタ
+            // - `len` は `buffer` の実長で、呼び出し中は生存している
+            // - C API は読み書きせず、ページロックを設定するだけ
             let result = unsafe { libc::mlock(ptr, len) };
             if result != 0 {
                 return Err(io::Error::last_os_error().to_string());
@@ -57,6 +59,10 @@ impl MemoryProtector {
             use windows_sys::Win32::System::Memory::VirtualLock;
             let ptr = buffer.as_mut_ptr() as *mut core::ffi::c_void;
             let len = buffer.len();
+            // SAFETY:
+            // - `ptr` は `buffer` の有効な先頭ポインタ
+            // - `len` は `buffer` の実長で、呼び出し中は生存している
+            // - Win32 API の契約に従い、メモリロック設定のみを行う
             let ok = unsafe { VirtualLock(ptr, len) };
             if ok == 0 {
                 return Err(io::Error::last_os_error().to_string());
@@ -83,6 +89,10 @@ impl MemoryProtector {
         {
             let ptr = buffer.as_mut_ptr() as *mut libc::c_void;
             let len = buffer.len();
+            // SAFETY:
+            // - `ptr` は `buffer` の有効な先頭ポインタ
+            // - `len` は `buffer` の実長で、呼び出し中は生存している
+            // - C API はロック解除のメタデータ更新のみを行う
             let result = unsafe { libc::munlock(ptr, len) };
             if result != 0 {
                 return Err(io::Error::last_os_error().to_string());
@@ -94,6 +104,10 @@ impl MemoryProtector {
             use windows_sys::Win32::System::Memory::VirtualUnlock;
             let ptr = buffer.as_mut_ptr() as *mut core::ffi::c_void;
             let len = buffer.len();
+            // SAFETY:
+            // - `ptr` は `buffer` の有効な先頭ポインタ
+            // - `len` は `buffer` の実長で、呼び出し中は生存している
+            // - Win32 API の契約に従い、メモリロック解除のみを行う
             let ok = unsafe { VirtualUnlock(ptr, len) };
             if ok == 0 {
                 return Err(io::Error::last_os_error().to_string());
@@ -120,6 +134,10 @@ impl MemoryProtector {
         {
             let ptr = buffer.as_mut_ptr() as *mut libc::c_void;
             let len = buffer.len();
+            // SAFETY:
+            // - `ptr` は `buffer` の有効な先頭ポインタ
+            // - `len` は `buffer` の実長で、呼び出し中は生存している
+            // - `madvise` には DONTDUMP ヒントのみを渡す
             let result = unsafe { libc::madvise(ptr, len, libc::MADV_DONTDUMP) };
             if result != 0 {
                 return Err(io::Error::last_os_error().to_string());
@@ -149,36 +167,6 @@ pub struct SecureMemory {
     protection: MemoryProtectionStatus,
 }
 
-/// `SecureMemory` 構築中に生メモリを管理するためのガード。
-/// 途中でエラーが発生しても必ずゼロ化と `dealloc` を実行します。
-struct RawSecureBuf {
-    ptr: NonNull<u8>,
-    len: usize,
-    layout: Layout,
-}
-
-impl RawSecureBuf {
-    #[inline]
-    fn as_mut_slice(&mut self) -> &mut [u8] {
-        unsafe { std::slice::from_raw_parts_mut(self.ptr.as_ptr(), self.len) }
-    }
-
-    #[inline]
-    fn into_vec(self) -> Vec<u8> {
-        let this = ManuallyDrop::new(self);
-        unsafe { Vec::from_raw_parts(this.ptr.as_ptr(), this.len, this.len) }
-    }
-}
-
-impl Drop for RawSecureBuf {
-    fn drop(&mut self) {
-        unsafe {
-            ptr::write_bytes(self.ptr.as_ptr(), 0, self.len);
-            dealloc(self.ptr.as_ptr(), self.layout);
-        }
-    }
-}
-
 impl SecureMemory {
     /// 新しいセキュアメモリを割り当てる
     /// - メモリロック（mlock/VirtualLock）でスワップ防止
@@ -192,29 +180,24 @@ impl SecureMemory {
             ));
         }
 
-        let layout = Layout::array::<u8>(len)
+        Layout::array::<u8>(len)
             .map_err(|_| CryptoError::MemoryError("Layout error".to_string()))?;
 
-        let ptr = unsafe { alloc(layout) };
-        let ptr = NonNull::new(ptr)
-            .ok_or_else(|| CryptoError::MemoryError("Memory allocation failed".to_string()))?;
-
-        unsafe {
-            ptr::write_bytes(ptr.as_ptr(), 0, len);
+        let mut data = Vec::new();
+        if data.try_reserve_exact(len).is_err() {
+            return Err(CryptoError::MemoryError(
+                "Memory allocation failed".to_string(),
+            ));
         }
+        data.resize(len, 0u8);
 
-        let mut raw = RawSecureBuf { ptr, len, layout };
-
-        if let Err(e) = MemoryProtector::lock_memory(raw.as_mut_slice()) {
+        if let Err(e) = MemoryProtector::lock_memory(&mut data) {
             return Err(CryptoError::MemoryError(format!(
                 "Memory protection failed: {e}"
             )));
         }
 
-        let additional_protection_error =
-            MemoryProtector::additional_protection(raw.as_mut_slice()).err();
-
-        let data = raw.into_vec();
+        let additional_protection_error = MemoryProtector::additional_protection(&mut data).err();
 
         Ok(Self {
             data,
