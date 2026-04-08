@@ -61,6 +61,11 @@ pub enum GenerationError {
     /// 強度評価に失敗した場合に発生します。
     #[error("Password strength evaluation failed: {0}")]
     StrengthEvaluationError(String),
+    /// 指定された文字集合構成では、与えられた長さのパスワードを
+    /// `MAX_PASSWORD_BYTES` 以内に収めることが原理的に不可能な場合に発生します。
+    /// DoS 防御の観点から、探索ループに入る前に事前検査で弾かれます。
+    #[error("Infeasible character set: {0}")]
+    InvalidCharset(String),
 }
 
 /// # Overview
@@ -68,6 +73,7 @@ pub enum GenerationError {
 pub fn exit_code_for_error(err: &GenerationError) -> i32 {
     match err {
         GenerationError::StrictTargetUnmet => 3,
+        GenerationError::InvalidCharset(_) => 2,
         _ => 1,
     }
 }

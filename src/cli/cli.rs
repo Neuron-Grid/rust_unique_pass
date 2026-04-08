@@ -1,5 +1,47 @@
 use {crate::password::password_generation::MAX_TIMEOUT_MS, clap::Parser};
 
+/// `--symbols-set` に対する CLI 層のハード上限 (文字数)。
+///
+/// これは zxcvbn 用の `MAX_PASSWORD_CHARS`/`MAX_PASSWORD_BYTES` とは別目的で、
+/// 異常入力 (巨大なカスタム記号セット) によるメモリ/CPU 浪費を防ぐための
+/// CLI 層ハードキャップである。パスワード強度の評価軸ではなく、
+/// DoS 防御目的の絶対上限であることに注意。
+pub const SYMBOLS_SET_MAX_CHARS: usize = 128;
+
+/// `--symbols-set` に対する CLI 層のハード上限 (バイト長)。
+///
+/// 多バイト文字のみを大量に渡されても過大割当が起きないよう、
+/// [`SYMBOLS_SET_MAX_CHARS`] と併せて適用する。DoS 防御目的。
+pub const SYMBOLS_SET_MAX_BYTES: usize = 256;
+
+/// `--symbols-set` 用の value_parser。
+///
+/// - 空文字列は拒否する (既存の `NonEmptyStringValueParser` 相当)。
+/// - 文字数が [`SYMBOLS_SET_MAX_CHARS`] を超える場合は拒否する。
+/// - バイト長が [`SYMBOLS_SET_MAX_BYTES`] を超える場合は拒否する。
+///
+/// 上限はパスワード強度由来ではなく DoS 防御目的のハードキャップである。
+fn parse_symbols_set(raw: &str) -> std::result::Result<String, String> {
+    if raw.is_empty() {
+        return Err("symbols-set must not be empty".to_string());
+    }
+    let char_len = raw.chars().count();
+    if char_len > SYMBOLS_SET_MAX_CHARS {
+        return Err(format!(
+            "symbols-set character length {} exceeds hard cap {} (CLI DoS guard)",
+            char_len, SYMBOLS_SET_MAX_CHARS
+        ));
+    }
+    if raw.len() > SYMBOLS_SET_MAX_BYTES {
+        return Err(format!(
+            "symbols-set byte length {} exceeds hard cap {} (CLI DoS guard)",
+            raw.len(),
+            SYMBOLS_SET_MAX_BYTES
+        ));
+    }
+    Ok(raw.to_string())
+}
+
 /// # Overview
 /// コマンドライン引数を定義する構造体。
 /// `clap` クレートを使用して引数をパースします。
@@ -134,10 +176,11 @@ pub struct RupassArgs {
     #[clap(
         long = "symbols-set",
         value_name = "SYMBOLS_SET",
-        help = "Custom set of symbols to use with --symbols (non-empty string).",
+        help = "Custom set of symbols to use with --symbols (non-empty string).\
+            \nHard caps: 128 chars / 256 bytes (CLI DoS guard).",
         requires = "symbols",
         conflicts_with = "no_symbols",
-        value_parser = clap::builder::NonEmptyStringValueParser::new()
+        value_parser = parse_symbols_set
     )]
     pub symbols_set: Option<String>,
 

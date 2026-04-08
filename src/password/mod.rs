@@ -8,6 +8,9 @@ pub use generate_pass::{
     generate_password_flow, generate_password_flow_with_evaluator,
     generate_password_flow_with_min_score,
 };
+// `produce_secure_password` is deprecated since 0.11.0. The re-export is kept
+// for source compatibility until the next breaking release.
+#[allow(deprecated)]
 pub use password_generation::{PasswordStrengthEvaluator, produce_secure_password};
 pub use password_length::validate_password_length;
 pub use reporting::{FlowReport, Warning};

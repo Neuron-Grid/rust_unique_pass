@@ -35,4 +35,5 @@ generated_password = "Password Generation Result"
 # New messages for time-budgeted strength search
 warning_best_effort_used = "Warning: Could not reach target score { $targetScore } within { $budgetMs } ms. Using best candidate: score { $bestScore } ({ $entropyBits } bits)."
 error_target_unmet_strict = "Error: Could not reach target score { $targetScore } within { $budgetMs } ms."
+error_infeasible_charset = "Error: The selected character set cannot produce a password of the requested length within the byte-length limit ({ $detail })."
 info_strength_line = "Strength: { $score }/4 (entropy: { $entropyBits } bits)"

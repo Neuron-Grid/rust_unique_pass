@@ -35,4 +35,5 @@ generated_password = "Das Passwort wurde generiert."
 # Neue Meldungen für zeitbudgetierte Stärkensuche
 warning_best_effort_used = "Warnung: Zielwert { $targetScore } konnte innerhalb von { $budgetMs } ms nicht erreicht werden. Bester Kandidat wird verwendet: Wert { $bestScore } ({ $entropyBits } Bits)."
 error_target_unmet_strict = "Fehler: Zielwert { $targetScore } konnte innerhalb von { $budgetMs } ms nicht erreicht werden."
+error_infeasible_charset = "Fehler: Mit dem gewählten Zeichensatz kann ein Passwort der angeforderten Länge die Byte-Längenbeschränkung nicht einhalten ({ $detail })."
 info_strength_line = "Stärke: { $score }/4 (Entropie: { $entropyBits } Bits)"

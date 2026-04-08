@@ -261,3 +261,79 @@ fn best_candidate_prefers_higher_entropy_on_same_score() -> std::result::Result<
     assert!(!outcome.reached_target);
     Ok(())
 }
+
+// validate_charset_feasibility のユニットテスト
+// 下限式: Σ min_utf8(req_set_i) + (length - 非空req数) * min_utf8(all_vec)
+
+#[test]
+fn feasibility_pure_ascii_charset_passes() {
+    let all: Vec<char> = "abcdef0123!@#".chars().collect();
+    let req: Vec<Vec<char>> = vec!["abc".chars().collect(), "012".chars().collect()];
+    assert!(validate_charset_feasibility(&all, &req, 32).is_ok());
+}
+
+#[test]
+fn feasibility_empty_all_vec_is_rejected() {
+    let all: Vec<char> = vec![];
+    let req: Vec<Vec<char>> = vec![];
+    let err = validate_charset_feasibility(&all, &req, 16).unwrap_err();
+    matches!(err, GenerationError::GenerationFailed);
+}
+
+#[test]
+fn feasibility_too_many_required_sets_is_rejected() {
+    // 3 個の非空 required set だが length = 2 → 不整合
+    let all: Vec<char> = "abc".chars().collect();
+    let req: Vec<Vec<char>> = vec![
+        "a".chars().collect(),
+        "b".chars().collect(),
+        "c".chars().collect(),
+    ];
+    let err = validate_charset_feasibility(&all, &req, 2).unwrap_err();
+    matches!(err, GenerationError::InvalidLength);
+}
+
+#[test]
+fn feasibility_multibyte_only_charset_is_rejected_for_long_password() {
+    // 4 バイト絵文字のみ。length = 1024 → 下限 4096 > MAX_PASSWORD_BYTES(3072)
+    let all: Vec<char> = "🔥🌊🌟".chars().collect();
+    let req: Vec<Vec<char>> = vec![];
+    let err = validate_charset_feasibility(&all, &req, 1024).unwrap_err();
+    matches!(err, GenerationError::InvalidCharset(_));
+}
+
+#[test]
+fn feasibility_multibyte_required_set_dominates_lower_bound() {
+    // all_vec は ASCII のみだが、required set が 4 バイト絵文字のみのケース。
+    // length = 16, 必須 set 1 つで 1 文字 (4B) + 残り 15 文字 (1B) = 19B → OK
+    let all: Vec<char> = "abcde".chars().collect();
+    let req: Vec<Vec<char>> = vec!["🔥".chars().collect()];
+    assert!(validate_charset_feasibility(&all, &req, 16).is_ok());
+}
+
+#[test]
+fn feasibility_required_multibyte_overflows_at_extreme_length() {
+    // required set は ASCII 含むので min は 1B、しかし all_vec は絵文字のみ。
+    // length = 1024 → 下限 1*1 + 1023*4 = 4093B > 3072B → reject
+    let all: Vec<char> = "🔥🌊".chars().collect();
+    let req: Vec<Vec<char>> = vec!["a".chars().collect()];
+    let err = validate_charset_feasibility(&all, &req, 1024).unwrap_err();
+    matches!(err, GenerationError::InvalidCharset(_));
+}
+
+#[test]
+fn feasibility_empty_required_sets_are_skipped() {
+    // 空の required set は無視される
+    let all: Vec<char> = "abcdef".chars().collect();
+    let req: Vec<Vec<char>> = vec![vec![], vec![]];
+    assert!(validate_charset_feasibility(&all, &req, 20).is_ok());
+}
+
+#[test]
+fn feasibility_boundary_exactly_at_max_passes() {
+    // ASCII のみで length = MAX_PASSWORD_BYTES の境界
+    let all: Vec<char> = "abc".chars().collect();
+    let req: Vec<Vec<char>> = vec![];
+    // 下限 = 3072 * 1 = 3072 == MAX_PASSWORD_BYTES → OK
+    assert!(validate_charset_feasibility(&all, &req, 3072).is_ok());
+}

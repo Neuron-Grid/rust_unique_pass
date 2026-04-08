@@ -177,6 +177,7 @@ enum UserFacingError {
         quiet: bool,
     },
     NoCharacterSet,
+    InvalidCharset(String),
     Other(String),
 }
 
@@ -189,6 +190,9 @@ impl UserFacingError {
                 quiet: args.quiet,
             },
             GenerationError::NoCharacterSet => UserFacingError::NoCharacterSet,
+            GenerationError::InvalidCharset(detail) => {
+                UserFacingError::InvalidCharset(detail.clone())
+            }
             _ => UserFacingError::Other(err.to_string()),
         }
     }
@@ -223,6 +227,20 @@ impl UserFacingError {
                 "Error: No character set selected.",
                 None,
             ),
+            UserFacingError::InvalidCharset(detail) => {
+                let default_msg = format!(
+                    "Error: The selected character set cannot produce a password of the requested length within the byte-length limit ({}).",
+                    detail
+                );
+                let mut eargs = FluentArgs::new();
+                eargs.set("detail", detail.as_str());
+                fallback_translation(
+                    bundle,
+                    "error_infeasible_charset",
+                    &default_msg,
+                    Some(&eargs),
+                )
+            }
             UserFacingError::Other(msg) => msg.clone(),
         }
     }

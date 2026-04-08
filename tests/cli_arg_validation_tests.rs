@@ -50,3 +50,44 @@ fn symbols_set_with_symbols_parses() -> TestResult<()> {
     assert_eq!(res.symbols_set.as_deref(), Some("!@#"));
     Ok(())
 }
+
+#[test]
+fn symbols_set_empty_is_rejected() {
+    let res = RupassArgs::try_parse_from(["rupass", "--symbols", "--symbols-set", ""]);
+    assert!(res.is_err(), "empty --symbols-set must be rejected by clap");
+}
+
+#[test]
+fn symbols_set_exceeding_char_cap_is_rejected() {
+    // 129 ASCII chars > SYMBOLS_SET_MAX_CHARS (128)
+    let big = "a".repeat(129);
+    let res = RupassArgs::try_parse_from(["rupass", "--symbols", "--symbols-set", &big]);
+    assert!(
+        res.is_err(),
+        "--symbols-set exceeding char cap must be rejected by clap"
+    );
+}
+
+#[test]
+fn symbols_set_at_char_cap_boundary_parses() -> TestResult<()> {
+    // 128 ASCII chars == SYMBOLS_SET_MAX_CHARS (boundary inclusive)
+    let at_cap = "a".repeat(128);
+    let res = RupassArgs::try_parse_from(["rupass", "--symbols", "--symbols-set", &at_cap])
+        .map_err(|e| format!("parse symbols-set at cap failed: {e:?}"))?;
+    assert_eq!(res.symbols_set.as_deref(), Some(at_cap.as_str()));
+    Ok(())
+}
+
+#[test]
+fn symbols_set_exceeding_byte_cap_is_rejected() {
+    // 65 four-byte chars = 65 chars / 260 bytes; 65 ≤ 128 chars OK,
+    // but 260 > 256 bytes → must be rejected by the byte cap.
+    let big_bytes: String = "🌟".repeat(65);
+    assert!(big_bytes.chars().count() <= 128);
+    assert!(big_bytes.len() > 256);
+    let res = RupassArgs::try_parse_from(["rupass", "--symbols", "--symbols-set", &big_bytes]);
+    assert!(
+        res.is_err(),
+        "--symbols-set exceeding byte cap must be rejected by clap"
+    );
+}

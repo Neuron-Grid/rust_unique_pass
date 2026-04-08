@@ -19,6 +19,7 @@ use crate::crypto::global_rng::ByteStream;
 use crate::password::character_set::assemble_character_set;
 use crate::password::password_generation::{
     GenerationOutcome, PasswordStrengthEvaluator, ZxcvbnEvaluator, produce_password_within_time,
+    validate_charset_feasibility,
 };
 use crate::password::password_length::get_password_length;
 use crate::password::reporting::{FlowReport, build_header, build_strength_line, build_warnings};
@@ -113,6 +114,10 @@ async fn generate_password_flow_internal(
 
     let all_vec: Vec<char> = all_chars.chars().collect();
     let req_vec: Vec<Vec<char>> = req_sets.iter().map(|s| s.chars().collect()).collect();
+
+    // 到達可能性の事前検査: DoS 防御。この構成では MAX_PASSWORD_BYTES を
+    // 超える候補しか出ないケースを探索ループの前に弾く。
+    validate_charset_feasibility(&all_vec, &req_vec, length)?;
 
     let outcome = produce_password_within_time(
         rng,

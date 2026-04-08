@@ -36,4 +36,5 @@ generated_password = "パスワードが生成されました。"
 # 新規: 時間予算ベース探索のメッセージ
 warning_best_effort_used = "警告: 目標スコア { $targetScore } に { $budgetMs } ms 以内に到達できませんでした。最良候補を使用します: スコア { $bestScore } ({ $entropyBits } bits)。"
 error_target_unmet_strict = "エラー: { $budgetMs } ms 以内に目標スコア { $targetScore } に到達できませんでした。"
+error_infeasible_charset = "エラー: 選択された文字セットでは、要求された長さのパスワードをバイト長上限内に収められません ({ $detail })。"
 info_strength_line = "強度: { $score }/4 (エントロピー: { $entropyBits } bits)"

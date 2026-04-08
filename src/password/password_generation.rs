@@ -30,6 +30,69 @@ pub const MAX_TIMEOUT_MS: u64 = 3_600_000;
 
 const MIN_PASSWORD_CHARS: usize = 8;
 
+/// # Overview
+/// 与えられた文字集合構成で `length` 文字のパスワードが
+/// [`crate::crypto::zxcvbn_wrapper::MAX_PASSWORD_BYTES`] 以内に
+/// 収まる可能性があるかを事前検査する。
+///
+/// 下限バイト数の計算:
+/// - 非空の `required set` は必ず1文字ずつ含まれるので、各セットの最小 UTF-8
+///   バイト長の合計が下限の一部となる。
+/// - 残りの `length - 非空req数` 文字は `all_vec` から選ばれるため、
+///   `all_vec` の最小 UTF-8 バイト長 × 残り文字数 を加算する。
+///
+/// この下限すら `MAX_PASSWORD_BYTES` を超える場合、どの候補も
+/// バイト長超過で棄却されるため、探索ループに入らず即エラーとする。
+/// DoS 防御を目的とした事前検査であり、パスワード強度評価とは独立している。
+///
+/// # Errors
+/// - `length` が `all_vec`/`req` に対して論理的に成立しない場合
+///   ([`GenerationError::InvalidLength`])
+/// - 下限バイト数が [`MAX_PASSWORD_BYTES`] を超える場合
+///   ([`GenerationError::InvalidCharset`])
+pub(crate) fn validate_charset_feasibility(
+    all_vec: &[char],
+    req: &[Vec<char>],
+    length: usize,
+) -> Result<()> {
+    if all_vec.is_empty() {
+        return Err(GenerationError::GenerationFailed);
+    }
+
+    // 非空の required set を数え、各セットの最小バイト長を集める。
+    let mut nonempty_req_count: usize = 0;
+    let mut req_min_bytes_sum: usize = 0;
+    for set in req {
+        if set.is_empty() {
+            continue;
+        }
+        nonempty_req_count += 1;
+        let min_in_set = set.iter().map(|c| c.len_utf8()).min().unwrap_or(0);
+        req_min_bytes_sum = req_min_bytes_sum.saturating_add(min_in_set);
+    }
+
+    if nonempty_req_count > length {
+        return Err(GenerationError::InvalidLength);
+    }
+
+    let all_min_bytes = all_vec.iter().map(|c| c.len_utf8()).min().unwrap_or(0);
+
+    let remaining = length - nonempty_req_count;
+    let min_possible_bytes =
+        req_min_bytes_sum.saturating_add(remaining.saturating_mul(all_min_bytes));
+
+    if min_possible_bytes > crate::crypto::zxcvbn_wrapper::MAX_PASSWORD_BYTES {
+        return Err(GenerationError::InvalidCharset(format!(
+            "minimum possible byte length {} exceeds MAX_PASSWORD_BYTES {} for password length {}",
+            min_possible_bytes,
+            crate::crypto::zxcvbn_wrapper::MAX_PASSWORD_BYTES,
+            length
+        )));
+    }
+
+    Ok(())
+}
+
 /// 時間予算による生成結果
 pub(crate) struct GenerationOutcome {
     pub password: Zeroizing<String>,
@@ -338,6 +401,10 @@ pub async fn produce_password_within_time(
 #[allow(clippy::unused_async)]
 // 将来の拡張用に保持
 #[allow(dead_code)]
+#[deprecated(
+    since = "0.11.0",
+    note = "Use produce_password_within_time instead. This legacy API runs a fixed-attempt loop and is kept only for source compatibility; it will be removed in a future release."
+)]
 pub async fn produce_secure_password(
     rng: &mut impl ByteStream,
     all_vec: &[char],
@@ -353,6 +420,10 @@ pub async fn produce_secure_password(
     if req.len() > len {
         return Err(GenerationError::InvalidLength);
     }
+
+    // 到達可能性の事前検査: 旧 API でも DoS 抜け道を作らないため、
+    // 新 API と同じ helper を呼び出して到達不能な構成を即座に弾く。
+    validate_charset_feasibility(all_vec, req, len)?;
 
     let mut sampler = StreamingIndexSampler::new(rng);
     let mut candidates: Vec<Zeroizing<String>> = Vec::with_capacity(STRENGTH_CHECK_INTERVAL);

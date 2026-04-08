@@ -43,6 +43,9 @@ pub use crypto::{CryptoError, GlobalRngStatistics, RngStatistics, SecureMemory, 
 pub use crypto::{MAX_PASSWORD_BYTES, MAX_PASSWORD_CHARS, zxcvbn_entropy_score};
 pub use crypto::{MemoryProtection, SecureString, TimingSafeOps, get_global_rng};
 /// パスワード生成の主要なフローを処理します。
+// `produce_secure_password` is deprecated since 0.11.0. The re-export is kept
+// for source compatibility until the next breaking release.
+#[allow(deprecated)]
 pub use password::{
     FlowReport, PasswordStrengthEvaluator, Warning, generate_password_flow,
     generate_password_flow_with_evaluator, generate_password_flow_with_min_score,
